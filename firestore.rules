@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Global Safety Net catch-all block:
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Primitive Helpers & Global Safeguards
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Checks if user is an admin by querying the whitelisted collection or matching the bootstrapped admin email
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == "raksha05jk.rao@gmail.com"
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 3. Validation Blueprints (prevent Shadow Updates and enforce Attribute-Based Access Controls)
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt'])
+        && data.keys().size() == 6
+        && data.uid == request.auth.uid
+        && data.email is string && data.email.size() <= 256
+        && data.displayName is string && data.displayName.size() <= 128
+        && data.photoURL is string && data.photoURL.size() <= 2000
+        && data.role in ['user', 'admin']
+        && (data.role == 'user' || isAdmin()) // prevent regular users from self-promoting
+        && data.createdAt == request.time;
+    }
+
+    function isValidPersonalResource(data) {
+      return data.keys().hasAll(['id', 'title', 'description', 'type', 'url', 'category', 'createdAt', 'updatedAt'])
+        && data.keys().size() == 8
+        && data.id is string && data.id.size() <= 128
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 256
+        && data.description is string && data.description.size() <= 10000
+        && data.type in ['pdf', 'link', 'video', 'other']
+        && data.url is string && data.url.size() > 0 && data.url.size() <= 10000 // Encrypted payload bounds
+        && data.category is string && data.category.size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidResourceHubItem(data) {
+      return data.keys().hasAll(['id', 'title', 'description', 'type', 'url', 'category', 'createdAt', 'createdBy', 'createdByName'])
+        && data.keys().size() == 9
+        && data.id is string && data.id.size() <= 128
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 256
+        && data.description is string && data.description.size() <= 10000
+        && data.type in ['pdf', 'link', 'video', 'other']
+        && data.url is string && data.url.size() > 0 && data.url.size() <= 10000
+        && data.category is string && data.category.size() <= 128
+        && data.createdAt == request.time
+        && data.createdBy == request.auth.uid
+        && data.createdByName is string && data.createdByName.size() <= 128;
+    }
+
+    // 4. Matches and Collection Guarding
+
+    // Profiles Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow create: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUser(incoming());
+      allow update: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUser(incoming())
+        && incoming().role == existing().role; // lock roles to prevent client-side privilege escalation
+      allow delete: if false; // security hardening: forbid profile deletion via client
+    }
+
+    // Personal Private Vault Subcollection (Insulated per-user)
+    match /users/{userId}/personal_resources/{resourceId} {
+      allow read, list: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId) && isValidId(resourceId) && isValidPersonalResource(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isOwner(userId) && isValidId(resourceId) && isValidPersonalResource(incoming())
+        && incoming().createdAt == existing().createdAt // immortal field guard for creation date
+        && incoming().updatedAt == request.time // temporal integrity guard
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'type', 'url', 'category', 'updatedAt']);
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Resource Hub Collection (Curated Content)
+    match /resource_hub/{resourceId} {
+      allow read, list: if isSignedIn(); // All signed-in candidates can download/view
+      allow create: if isAdmin() && isValidId(resourceId) && isValidResourceHubItem(incoming());
+      allow update: if isAdmin() && isValidId(resourceId) && isValidResourceHubItem(incoming())
+        && incoming().createdBy == existing().createdBy // lock creator identity
+        && incoming().createdAt == existing().createdAt; // keep static creation time
+      allow delete: if isAdmin();
+    }
+
+    // Whitelisted Core Admins List
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Strictly non-modifiable from current client; Console manipulation only
+    }
+  }
+}

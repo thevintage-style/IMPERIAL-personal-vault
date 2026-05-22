@@ -1,0 +1,6 @@
+{
+  "name": "UPSC Personal Vault",
+  "description": "A secure workspace for UPSC aspirants featuring an insulated Personal Vault for storing study materials, PDFs, links, and videos, alongside an expert-curated Resource Hub for shared community materials.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

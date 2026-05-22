@@ -1,0 +1,983 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  subscribeToAuth, 
+  subscribePersonalResources, 
+  subscribeResourceHub, 
+  savePersonalResource, 
+  deletePersonalResource, 
+  saveResourceHubItem, 
+  deleteResourceHubItem, 
+  importItemToPersonalVault, 
+  signInWithGoogle, 
+  signOutUser,
+  subscribeFolders,
+  saveFolder,
+  deleteFolder
+} from './lib/vaultService';
+import { isLocalSandbox } from './lib/firebase';
+import { PersonalResource, ResourceHubItem, UPSCCategories, ResourceType, UserProfile, Folder } from './types';
+import VaultStats from './components/VaultStats';
+import ResourceCard from './components/ResourceCard';
+import ResourceForm from './components/ResourceForm';
+import { 
+  ShieldCheck, 
+  BookOpen, 
+  Users, 
+  Search, 
+  Plus, 
+  LogOut, 
+  Info, 
+  Lock, 
+  Filter, 
+  Grid,
+  Sparkles,
+  ClipboardList,
+  AlertTriangle,
+  FolderOpen,
+  FolderPlus,
+  ExternalLink,
+  ChevronRight,
+  Trash2,
+  StickyNote
+} from 'lucide-react';
+
+export default function App() {
+  // Authentication & Session States
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'personal' | 'hub'>('personal');
+
+  // Resource Database States
+  const [personalResources, setPersonalResources] = useState<PersonalResource[]>([]);
+  const [hubResources, setHubResources] = useState<ResourceHubItem[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  
+  // Dashboard Interactive States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('');
+  
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [showStats, setShowStats] = useState(true);
+
+  // Folder Creator Input State
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+
+  // Subscribe to Authentication transitions
+  useEffect(() => {
+    const unsubscribe = subscribeToAuth((user) => {
+      setCurrentUser(user);
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Subscribe to Private Personal Resources once authenticated
+  useEffect(() => {
+    if (!currentUser) {
+      setPersonalResources([]);
+      return;
+    }
+    const unsubscribe = subscribePersonalResources(currentUser.uid, (items) => {
+      setPersonalResources(items);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Subscribe to Public Expert Curated Resource Hub
+  useEffect(() => {
+    if (!currentUser) {
+      setHubResources([]);
+      return;
+    }
+    const unsubscribe = subscribeResourceHub((items) => {
+      setHubResources(items);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Subscribe to Folders collection
+  useEffect(() => {
+    if (!currentUser) {
+      setFolders([]);
+      return;
+    }
+    const unsubscribe = subscribeFolders(currentUser.uid, (data) => {
+      setFolders(data);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Handle Authentication trigger
+  const handleSignIn = async () => {
+    try {
+      setErrorBanner(null);
+      await signInWithGoogle();
+    } catch (err: any) {
+      setErrorBanner(err?.message || "Google Authenticate error. Verify login popup properties.");
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOutUser();
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
+
+  // Helper folder creation
+  const handleCreateFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !newFolderName.trim()) return;
+    try {
+      const payload = {
+        id: "fold_" + Math.random().toString(36).substring(2, 11),
+        name: newFolderName.trim()
+      };
+      await saveFolder(currentUser.uid, payload);
+      setNewFolderName('');
+      setIsCreatingFolder(false);
+    } catch (err: any) {
+      console.error(err);
+      alert("Folder writing failed. Check DB access security rules.");
+    }
+  };
+
+  // Helper folder delete
+  const handleDeleteFolder = async (folderId: string) => {
+    if (!currentUser) return;
+    if (confirm("Are you sure you want to delete this folder? The items belonging to this folder will remain in your vault, but they will become unassigned.")) {
+      try {
+        await deleteFolder(currentUser.uid, folderId);
+        // Clean matching state if active
+        if (selectedFolderId === folderId) {
+          setSelectedFolderId('');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  // Move items between folders on the fly
+  const handleMoveFolder = async (itemId: string, targetFolderId: string) => {
+    if (!currentUserZone()) return;
+    const item = personalResources.find(x => x.id === itemId);
+    if (!item) return;
+
+    try {
+      const updatedFolderId = targetFolderId === 'unassigned' ? '' : targetFolderId;
+      await savePersonalResource(currentUserZone().uid, {
+        title: item.title,
+        description: item.description,
+        type: item.type,
+        url: item.url,
+        category: item.category,
+        folderId: updatedFolderId
+      }, item.id);
+    } catch (err) {
+      console.error("Folder migration failed:", err);
+    }
+  };
+
+  const currentUserZone = () => {
+    if (!currentUser) throw new Error("Anonymous state blocks access.");
+    return currentUser;
+  };
+
+  // Create or Update personal vault resource
+  const handleSavePersonal = async (item: { title: string; description: string; type: ResourceType; url: string; category: string; folderId?: string }) => {
+    if (!currentUser) return;
+    await savePersonalResource(currentUser.uid, item, editingItem?.id);
+    setEditingItem(null);
+  };
+
+  // Create or Update curator resource hub item (Admin access)
+  const handleSaveHub = async (item: { title: string; description: string; type: ResourceType; url: string; category: string; folderId?: string }) => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      throw new Error("Privilege mismatch. Only verified administrators can upload to the Resource Hub.");
+    }
+    await saveResourceHubItem(currentUser.uid, currentUser.displayName, item, editingItem?.id);
+    setEditingItem(null);
+  };
+
+  // Open Edit Mode
+  const handleEditClick = (item: any) => {
+    setEditingItem(item);
+    setIsFormOpen(true);
+  };
+
+  // Personal item deletion
+  const handleDeletePersonal = async (id: string) => {
+    if (!currentUser) return;
+    if (confirm("Are you sure you want to remove this study resource from your Personal Vault?")) {
+      await deletePersonalResource(currentUser.uid, id);
+    }
+  };
+
+  // Hub item deletion (Admin only)
+  const handleDeleteHub = async (id: string) => {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    if (confirm("Are you sure you want to delete this shared item from the public Resource Hub? This resets it for all students.")) {
+      await deleteResourceHubItem(id);
+    }
+  };
+
+  // Quick save from shared Hub to candidate private workspace
+  const handleImportHubItem = async (hubItem: ResourceHubItem) => {
+    if (!currentUser) return;
+    try {
+      await importItemToPersonalVault(currentUser.uid, hubItem);
+    } catch (err) {
+      console.error("Failed to copy resource to personal vault:", err);
+      alert("Encryption error during copying. Review device access keys.");
+    }
+  };
+
+  // Filtering Logic
+  const filteredPersonal = useMemo(() => {
+    return personalResources.filter(res => {
+      const matchesSearch = res.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            res.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            res.url.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || res.category === selectedCategory;
+      const matchesType = selectedType === 'all' || res.type === selectedType;
+      const matchesFolder = !selectedFolderId || res.folderId === selectedFolderId;
+      return matchesSearch && matchesCategory && matchesType && matchesFolder;
+    });
+  }, [personalResources, searchQuery, selectedCategory, selectedType, selectedFolderId]);
+
+  const filteredHub = useMemo(() => {
+    return hubResources.filter(res => {
+      const matchesSearch = res.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            res.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            res.url.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || res.category === selectedCategory;
+      const matchesType = selectedType === 'all' || res.type === selectedType;
+      return matchesSearch && matchesCategory && matchesType;
+    });
+  }, [hubResources, searchQuery, selectedCategory, selectedType]);
+
+  const activeResourcesCount = activeTab === 'personal' ? filteredPersonal.length : filteredHub.length;
+
+  // Onboarding guides label
+  const guideTip = useMemo(() => {
+    if (activeTab === 'personal') {
+      if (personalResources.length === 0) {
+        return "💡 Tip: Your private vault is currently empty! Use the '+ Index Study Material' button at the top to secure your first PDF, Photo post or YouTube lecture.";
+      }
+      return `📊 Displaying ${filteredPersonal.length} of ${personalResources.length} personalized assets. All URLs and Photos are AES-256 decrypted in-memory inside your local web-isolated workspace.`;
+    } else {
+      if (hubResources.length === 0) {
+        return "🕒 The Shared Curation Hub is waiting for expert content uploads. Only admins can initialize these study boards.";
+      }
+      return "🤝 Hint: Browse verified curations by mentors. Hover over a study block and click 'Save' to import and encrypt it into your private vault.";
+    }
+  }, [activeTab, personalResources, hubResources, filteredPersonal, filteredHub]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center font-sans text-[#1A1A1A]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="w-12 h-12 border-4 border-[#E5E7EB] border-t-[#0F172A] rounded-full animate-spin font-sans"></div>
+            <Lock className="w-5 h-5 text-[#0F172A] absolute inset-0 m-auto" />
+          </div>
+          <span className="text-xs font-mono tracking-widest text-[#64748B] uppercase animate-pulse">
+            Configuring Cryptographic Shields ...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // --- GATEWAY VISUAL SCREEN (Unauthenticated state) ---
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FA] relative overflow-hidden flex flex-col justify-between py-12 px-4 font-sans text-[#1A1A1A]" id="auth_portal_root">
+        
+        {/* Decorative backdrop elements */}
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#0f172a]/5 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#0f172a]/5 rounded-full blur-[120px]"></div>
+
+        {/* Global Nav details */}
+        <div className="max-w-6xl mx-auto w-full flex items-center justify-between mb-8 z-10">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 bg-white border border-[#E5E7EB] rounded-2xl text-[#0F172A] shadow-sm">
+              <ShieldCheck className="w-6 h-6 text-[#0F172A]" />
+            </div>
+            <div>
+              <h1 className="text-sm font-display font-bold tracking-tight text-[#0F172A] uppercase sm:text-base">UPSC SafeVault</h1>
+              <p className="text-[10px] font-mono text-[#64748B] tracking-wider">SECURED ACADEMIC WORKSPACE</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-mono text-[#64748B]">
+            <span>Storage Service:</span>
+            <span className="text-[#0F172A] bg-slate-100 px-2.5 py-0.5 rounded border border-[#E5E7EB] font-mono font-bold">AES-256 GCM</span>
+          </div>
+        </div>
+
+        {/* Hero Central Block */}
+        <div className="max-w-4xl mx-auto w-full text-center my-auto py-8 z-10">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white text-[#0F172A] border border-[#E5E7EB] rounded-full text-xs font-mono font-bold tracking-wide uppercase mb-6 shadow-xs">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-505" />
+            Zero-Trust Cloud Index for UPSC Aspirants
+          </span>
+          
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-display font-extrabold text-[#0F172A] tracking-tight leading-[1.1] mb-6 font-sans">
+            Your Private Syllabus Ledger. <br />
+            <span className="text-[#0F172A]">
+              Curate, Encrypt, and Master.
+            </span>
+          </h2>
+
+          <p className="text-sm sm:text-base md:text-lg text-[#64748B] max-w-2xl mx-auto leading-relaxed mb-10 font-sans">
+            A secured, clean database for civil services aspirants to insulate custom lecture videos, study sheets, Web URLs, custom note entries, and photos from files, paired with a shared, expert-moderated learning hub.
+          </p>
+
+          {/* Dual Vault Presentation Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto mb-10 text-left">
+            <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 text-slate-350">
+                <Lock className="w-5 h-5 opacity-40 text-slate-400" />
+              </div>
+              <h3 className="text-xs font-mono text-indigo-600 tracking-widest mb-1.5">Cabinet 01</h3>
+              <h4 className="text-sm font-display font-bold text-[#0F172A] mb-2 font-sans">Personal Private Vault</h4>
+              <p className="text-xs text-[#64748B] leading-relaxed font-sans">
+                Keep and index your secret files, custom notes, hand-written diagram images, and lecture pointers. Everything is scrambled inside your browser before uploading to the cloud.
+              </p>
+            </div>
+
+            <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 text-slate-350">
+                <Users className="w-5 h-5 opacity-44 text-slate-400" />
+              </div>
+              <h3 className="text-xs font-mono text-amber-600 tracking-widest mb-1.5">Cabinet 02</h3>
+              <h4 className="text-sm font-display font-bold text-[#0F172A] mb-2 font-sans">Curated Resource Hub</h4>
+              <p className="text-xs text-[#64748B] leading-relaxed font-sans">
+                Browse official syllabus reviews, PYQ mappings, and expert curated pointers. Restrictive mentor policies apply: only verified admins can modify hub indexes.
+              </p>
+            </div>
+          </div>
+
+          {/* Secure Google Account Enter Controls */}
+          <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={handleSignIn}
+              className="py-3.5 px-8 bg-[#0F172A] hover:bg-[#1E293B] active:translate-y-0.5 text-xs font-bold text-white rounded-xl shadow-md transition-all font-sans cursor-pointer inline-flex items-center gap-2.5"
+              id="google-signin-action"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-6.887 4.114-4.82 0-8.73-3.665-8.73-8.514s3.91-8.514 8.73-8.514c2.146 0 4.103.789 5.626 2.193l3.228-3.228C18.156 1.455 15.34 0 12.24 0 5.48 0 0 5.48 0 12.24s5.48 12.24 12.24 12.24c7.07 0 11.758-4.975 11.758-11.956 0-.814-.073-1.429-.228-2.24H12.24z"/>
+              </svg>
+              Enter Workspace with Google Account
+            </button>
+            <p className="text-[11px] font-mono text-[#64748B]">
+              🔒 Instant passwordless Gmail integration. All assets synced with cloud encryption schemas.
+            </p>
+          </div>
+
+          {errorBanner && (
+            <div className="mt-6 p-3 bg-red-50 border border-red-200 max-w-md mx-auto text-xs text-red-700 rounded-xl" id="auth_error_logs">
+              {errorBanner}
+            </div>
+          )}
+        </div>
+
+        {/* Footer info */}
+        <div className="max-w-6xl mx-auto w-full text-center text-xs text-[#64748B] font-mono flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-[#E5E7EB] pt-6">
+          <span>&copy; 2026 UPSC Secure Vault Network. Cryptographically insulated.</span>
+          <div className="flex gap-4">
+            <span className="text-slate-400">Secure Vault Protocol v2.5</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- AUTHENTICATED PORTAL WORKSPACE AREA ---
+  return (
+    <div className="min-h-screen bg-[#F8F9FA] text-[#1A1A1A] flex flex-col font-sans" id="authenticated_dashboard_root">
+      
+      {/* ⚠️ Sandbox Mode Warning banner */}
+      {isLocalSandbox && (
+        <div className="bg-amber-50 border-b border-amber-200 py-3 px-4 text-xs font-sans text-amber-900 shadow-sm flex items-center justify-between" id="local_sandbox_ribbon">
+          <div className="max-w-7xl mx-auto w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-amber-100/80 rounded-lg text-amber-800 border border-amber-200 flex-shrink-0">
+                <AlertTriangle className="w-4 h-4 animate-pulse" />
+              </div>
+              <p className="leading-normal font-sans">
+                <strong>UPSC Safe-Vault Sandbox Active:</strong> Cloud Firestore resources are currently stored locally in your insulated browser space under 256-bit encryption. Approve database endpoints via settings to connect cloud clusters.
+              </p>
+            </div>
+            <button 
+              onClick={() => alert("Simulated Sandbox storage uses the exact same encryption rules as real cloud storage, saving fully scrambled payload strings to localStorage for continuous secure testing.")}
+              className="px-2.5 py-1 bg-[#0F172A] hover:bg-[#1E293B] text-[10px] font-mono text-white rounded-lg transition-colors cursor-pointer self-end sm:self-auto uppercase tracking-wide"
+              lg-id="sandbox-info-btn"
+            >
+              Learn More
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Sticky Global Header */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] px-4 py-3 sm:px-6 shadow-sm">
+        <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
+          
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-slate-100 border border-[#E5E7EB] rounded-2xl text-[#0F172A] shadow-sm">
+              <ShieldCheck className="w-5 h-5 animate-pulse text-[#0F172A]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-display font-extrabold tracking-tight text-[#0F172A] leading-none uppercase">UPSC SafeVault</h1>
+                <span className={`text-[9px] font-mono font-bold leading-none px-1.5 py-0.5 rounded border uppercase tracking-wider ${
+                    activeTab === 'personal' 
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-150' 
+                      : 'bg-[#FFFBEB] text-amber-700 border-amber-150'
+                }`}>
+                  {activeTab === 'personal' ? 'Private' : 'Hub'}
+                </span>
+              </div>
+              <p className="text-[10px] font-mono text-[#64748B] mt-0.5">ACADEMIC SECURE SAFE</p>
+            </div>
+          </div>
+
+          {/* User Bio and Logout controller */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-2.5 bg-[#F8FAFC] p-1.5 rounded-xl border border-[#E5E7EB]">
+              <img 
+                src={currentUser.photoURL} 
+                alt="Avatar" 
+                referrerPolicy="no-referrer"
+                className="w-8 h-8 rounded-lg object-cover border border-[#E5E7EB] shadow-inner flex-shrink-0"
+              />
+              <div className="hidden sm:block text-left text-xs font-sans">
+                <p className="font-bold text-[#0F172A] line-clamp-1">{currentUser.displayName}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[9px] font-mono text-[#64748B] uppercase truncate max-w-[100px]" title={currentUser.email}>
+                    {currentUser.email}
+                  </span>
+                  {currentUser.role === 'admin' ? (
+                    <span className="text-[8px] font-bold font-sans text-amber-700 bg-amber-50 px-1 py-0.2 rounded border border-amber-250">
+                      ADMIN
+                    </span>
+                  ) : (
+                    <span className="text-[8px] font-bold font-sans text-indigo-700 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-250">
+                      ASPIRANT
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSignOut}
+              className="p-2.5 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] border border-[#E5E7EB] rounded-xl transition-all cursor-pointer bg-white"
+              title="Sign Out of Secure Workspace"
+              lg-id="logout-btn"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+
+        </div>
+      </header>
+
+      {/* Primary Workspace Board */}
+      <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:px-8 space-y-6">
+        
+        {/* Onboarding tips notifications */}
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 text-xs font-sans text-[#64748B] flex items-center gap-2.5 shadow-sm justify-between" id="onboarding_guide_banner">
+          <div className="flex items-center gap-2.5">
+            <Info className="w-4 h-4 text-slate-550 flex-shrink-0" />
+            <p className="leading-snug">{guideTip}</p>
+          </div>
+          <button 
+            onClick={() => setShowStats(!showStats)}
+            className="text-[10px] font-bold font-mono text-[#0F172A] hover:underline cursor-pointer uppercase flex-shrink-0"
+            lg-id="toggle-stats-btn"
+          >
+            {showStats ? "Hide Stats" : "Show Stats"}
+          </button>
+        </div>
+
+        {/* Collapsible Statistics Bento Panel */}
+        {showStats && (
+          <VaultStats
+            personalCount={personalResources.length}
+            hubCount={hubResources.length}
+            personalResources={personalResources}
+            hubResources={hubResources}
+            isSandbox={isLocalSandbox}
+            currentUserRole={currentUser.role}
+          />
+        )}
+
+        {/* Connected UPSC Platforms Integration links */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="upsc_external_integration_links">
+          <a 
+            href="https://imperial-notes.vercel.app/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="group bg-white hover:bg-slate-50 border border-[#E5E7EB] p-4 rounded-2xl shadow-xs transition-all flex items-center justify-between gap-4 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-50 rounded-xl group-hover:scale-105 transition-transform border border-amber-100 flex-shrink-0 text-amber-600">
+                <StickyNote className="w-5 h-5 text-amber-605" />
+              </div>
+              <div>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-1.5 font-sans">
+                  Make Notes
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-950 transition-colors" />
+                </h4>
+                <p className="text-[11px] text-[#64748B] mt-1 font-sans leading-relaxed">
+                  Redirect to external premium pad workspace. Compose summaries and import notes back here for synced category organization.
+                </p>
+              </div>
+            </div>
+            <div className="text-[10px] font-mono text-indigo-700 bg-indigo-50/70 border border-indigo-120 px-2 py-1 rounded group-hover:bg-indigo-100 transition-all flex items-center gap-1 flex-shrink-0 font-bold uppercase select-none">
+              Launch note-maker &rarr;
+            </div>
+          </a>
+
+          <a 
+            href="https://oracle-ai-c2mq.vercel.app/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="group bg-white hover:bg-slate-50 border border-[#E5E7EB] p-4 rounded-2xl shadow-xs transition-all flex items-center justify-between gap-4 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-indigo-55 bg-indigo-50 rounded-xl group-hover:scale-105 transition-transform border border-indigo-100 flex-shrink-0 text-indigo-600">
+                <Sparkles className="w-5 h-5 text-indigo-605" />
+              </div>
+              <div>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-1.5 font-sans">
+                  Oracle Desk
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-950 transition-colors" />
+                </h4>
+                <p className="text-[11px] text-[#64748B] mt-1 font-sans leading-relaxed">
+                  Access AI Companion services. Formulate outlines, query past test solutions, and sync answers directly under syllabus tags.
+                </p>
+              </div>
+            </div>
+            <div className="text-[10px] font-mono text-slate-700 bg-slate-100 border border-slate-200 px-2 py-1 rounded group-hover:bg-slate-200/60 transition-all flex items-center gap-1 flex-shrink-0 font-bold uppercase select-none">
+              Consult Oracle AI &rarr;
+            </div>
+          </a>
+        </div>
+
+        {/* Workspace Dual Cabinet Controller Tabs and Search bar */}
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl p-5 shadow-sm flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between" id="filter_command_center">
+          
+          {/* Dual Tabs toggler */}
+          <div className="flex items-center p-1.5 bg-[#F1F5F9] border border-[#E5E7EB] rounded-xl max-w-md w-full" id="dual_vault_selectors">
+            <button
+              onClick={() => {
+                setActiveTab('personal');
+                setSelectedFolderId(''); // Reset selected folder when switching tabs
+              }}
+              className={`flex-1 py-2 px-4 rounded-lg text-xs font-semibold font-sans tracking-wide transition-all outline-none flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'personal'
+                  ? 'bg-white text-[#0F172A] font-bold shadow-sm border border-[#E5E7EB]'
+                  : 'text-[#64748B] hover:text-[#0F172A]'
+              }`}
+              lg-id="tab-personal-btn"
+            >
+              <Lock className="w-3.5 h-3.5 text-[#0F172A]" />
+              Personal Private Vault ({personalResources.length})
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('hub');
+                setSelectedFolderId('');
+              }}
+              className={`flex-1 py-2 px-4 rounded-lg text-xs font-semibold font-sans tracking-wide transition-all outline-none flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'hub'
+                  ? 'bg-white text-[#0F172A] font-bold shadow-sm border border-[#E5E7EB]'
+                  : 'text-[#64748B] hover:text-[#0F172A]'
+              }`}
+              lg-id="tab-hub-btn"
+            >
+              <Users className="w-3.5 h-3.5 text-slate-600" />
+              Expert Resource Hub ({hubResources.length})
+            </button>
+          </div>
+
+          {/* Combined Search & Write Button bar */}
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:max-w-2xl">
+            
+            {/* Search Input */}
+            <div className="relative w-full">
+              <Search className="w-4 h-4 text-[#64748B] absolute left-3.5 top-3.5" />
+              <input
+                type="text"
+                placeholder={`Search ${activeTab === 'personal' ? 'personal secret' : 'expert shared curated'} resources...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E5E7EB] focus:border-[#0F172A] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-all shadow-sm font-sans"
+                id="search_box_input"
+              />
+            </div>
+
+            {/* Write Button */}
+            <button
+              onClick={() => {
+                setEditingItem(null); // Explicit clear for insert mode
+                setIsFormOpen(true);
+              }}
+              className="py-2.5 px-5 text-xs font-bold leading-none text-white rounded-xl shadow-sm transition-all flex items-center gap-2 w-full sm:w-auto justify-center select-none cursor-pointer bg-[#0F172A] hover:bg-[#1E293B] active:translate-y-0.5 flex-shrink-0 font-sans"
+              lg-id="add-resource-indicator"
+            >
+              <Plus className="w-4 h-4 flex-shrink-0" />
+              Index Material
+            </button>
+
+          </div>
+        </div>
+
+        {/* Categories Tabs Carousel */}
+        <div className="bg-white border border-[#E5E7EB] p-2 rounded-2xl flex flex-wrap gap-1.5 items-center shadow-sm" id="category_bar_track">
+          <div className="text-[10px] font-mono text-[#64748B] uppercase tracking-wider px-3 flex items-center gap-1">
+            <Filter className="w-3.5 h-3.5 text-slate-500" />
+            Topic:
+          </div>
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-mono tracking-wider transition-all select-none cursor-pointer ${
+              selectedCategory === 'all'
+                ? 'bg-[#0F172A] text-white font-bold'
+                : 'text-[#64748B] hover:text-[#0F172A]'
+            }`}
+            lg-id="cat-filter-all"
+          >
+            ALL PAPERS
+          </button>
+          {UPSCCategories.map(cat => {
+            const personalCountInCat = personalResources.filter(x => x.category === cat.value).length;
+            const hubCountInCat = hubResources.filter(x => x.category === cat.value).length;
+            const hasDataInCat = activeTab === 'personal' ? personalCountInCat > 0 : hubCountInCat > 0;
+            
+            return (
+              <button
+                key={cat.value}
+                onClick={() => setSelectedCategory(cat.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all select-none cursor-pointer ${
+                  selectedCategory === cat.value
+                    ? 'bg-[#F1F5F9] border border-[#E5E7EB] text-[#0F172A] font-bold'
+                    : hasDataInCat
+                      ? 'text-[#0f172a] hover:bg-slate-50 font-medium'
+                      : 'text-[#94A3B8] hover:text-[#64748B]'
+                }`}
+                lg-id={`cat-filter-${cat.value}`}
+              >
+                {cat.value}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Format Selectors and Header labels */}
+        <div className="flex items-center justify-between gap-4 mt-2">
+          <div className="flex items-center gap-2 text-xs text-[#64748B] font-mono">
+            <Grid className="w-3.5 h-3.5 text-[#0F172A]" />
+            <span>Viewing <strong className="text-[#0F172A]">{activeResourcesCount}</strong> study tracks</span>
+          </div>
+
+          {/* Quick type tags switcher */}
+          <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-[#E5E7EB] shadow-sm">
+            <span className="text-[10px] text-[#64748B] uppercase font-mono px-1">Type:</span>
+            {['all', 'pdf', 'video', 'link', 'photo', 'note', 'other'].map(t => (
+              <button
+                key={t}
+                onClick={() => setSelectedType(t)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase transition-colors select-none cursor-pointer ${
+                  selectedType === t
+                    ? 'bg-[#0F172A] text-white font-semibold'
+                    : 'text-[#64748B] hover:text-[#0F172A]'
+                }`}
+                lg-id={`type-filter-${t}`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Dynamic Multi-Column Master/Explorer Layout with Folder shelf on Left split */}
+        <div className="flex flex-col md:flex-row gap-6 items-start" id="explorer_master_layout">
+          
+          {/* Left folder panel (Only relevant for personal custom workspace tab to keep clean focus) */}
+          {activeTab === 'personal' && (
+            <aside className="w-full md:w-64 flex-shrink-0 space-y-4" id="study_folders_cabinet">
+              <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-sm space-y-4 w-full">
+                
+                {/* Cabinet Header */}
+                <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
+                  <h3 className="text-xs font-display font-black text-[#0F172A] uppercase tracking-wider flex items-center gap-2 font-sans">
+                    <FolderOpen className="w-4 h-4 text-slate-500" />
+                    Study Folders
+                  </h3>
+                  <button
+                    onClick={() => setIsCreatingFolder(!isCreatingFolder)}
+                    className="p-1 hover:bg-[#F1F5F9] rounded-lg text-slate-500 hover:text-[#0F172A] transition-all cursor-pointer"
+                    title="Create Study Folder"
+                    type="button"
+                    lg-id="add-folder-trigger"
+                  >
+                    <FolderPlus className="w-4.5 h-4.5 text-indigo-650" />
+                  </button>
+                </div>
+
+                {/* Inline Folder Creation Form */}
+                {isCreatingFolder && (
+                  <form onSubmit={handleCreateFolder} className="space-y-2 animate-fade-in p-2 bg-slate-50 rounded-xl border border-dashed border-slate-250">
+                    <input
+                      type="text"
+                      placeholder="Folder name (e.g. GS2 Polity)"
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      className="w-full bg-white border border-[#E5E7EB] rounded-xl px-3 py-1.5 text-xs text-[#1A1A1A] outline-none focus:border-[#0F172A] font-sans"
+                      autoFocus
+                      required
+                    />
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingFolder(false)}
+                        className="px-2 py-1 text-[9.5px] font-bold text-slate-600 bg-white border border-slate-200 rounded-md cursor-pointer hover:bg-slate-50 font-sans"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-2.5 py-1 text-[9.5px] font-bold text-white bg-[#0F172A] hover:bg-[#1E293B] rounded-md cursor-pointer font-sans"
+                      >
+                        Create
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Folder lists mapping */}
+                <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
+                  
+                  {/* Select ALL folders */}
+                  <button
+                    onClick={() => setSelectedFolderId('')}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-sans transition-all flex items-center justify-between cursor-pointer ${
+                      selectedFolderId === ''
+                        ? 'bg-[#0F172A] text-white font-bold'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                    type="button"
+                  >
+                    <span className="flex items-center gap-2 truncate">
+                      📁 All Loose & Foldered files
+                    </span>
+                    <span className={`text-[10px] font-mono px-1.5 rounded ${
+                      selectedFolderId === '' ? 'bg-white/20 text-white' : 'bg-slate-100 text-[#0F172A]'
+                    }`}>
+                      {personalResources.length}
+                    </span>
+                  </button>
+
+                  {/* Individual custom Folders */}
+                  {folders.map(folder => {
+                    const count = personalResources.filter(r => r.folderId === folder.id).length;
+                    const isSelected = selectedFolderId === folder.id;
+                    return (
+                      <div key={folder.id} className="group flex items-center justify-between rounded-xl hover:bg-slate-50/70 pr-2">
+                        <button
+                          onClick={() => setSelectedFolderId(folder.id)}
+                          className={`flex-1 text-left px-3 py-1.5 text-xs font-sans transition-all flex items-center gap-2 truncate cursor-pointer ${
+                            isSelected
+                              ? 'text-indigo-755 font-bold bg-slate-100/80 rounded-lg'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                          type="button"
+                        >
+                          <span className="truncate">📂 {folder.name}</span>
+                        </button>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="text-[9.5px] bg-slate-100 text-slate-705 px-1.5 rounded font-mono group-hover:bg-slate-200/50">
+                            {count}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteFolder(folder.id)}
+                            className="p-1 text-[#94A3B8] hover:text-red-600 rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer flex items-center justify-center"
+                            title="Delete folder and release notes inside"
+                            type="button"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {folders.length === 0 && !isCreatingFolder && (
+                    <div className="text-center py-4 text-[11px] text-[#94A3B8] font-sans">
+                      No custom folders created yet. Click the folder icon above to make folder categories.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </aside>
+          )}
+
+          {/* Right/Central: GRID OF DATA CARDS */}
+          <div className="flex-1 w-full" id="cards_grid_wrapper">
+            {activeTab === 'personal' ? (
+              filteredPersonal.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in" id="personal_grid_cards">
+                  {filteredPersonal.map(res => (
+                    <ResourceCard
+                      key={res.id}
+                      item={res}
+                      origin="personal"
+                      onDelete={handleDeletePersonal}
+                      isAdmin={currentUser.role === 'admin'}
+                      folders={folders}
+                      onEdit={handleEditClick}
+                      onMoveFolder={handleMoveFolder}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-12 text-center bg-white border border-[#E5E7EB] rounded-2xl min-h-[300px] shadow-sm" id="empty_personal_vault">
+                  <div className="p-4 bg-[#F8FAFC] border border-[#E5E7EB] rounded-2xl text-[#0F172A] mb-4 shadow-sm">
+                    <Lock className="w-10 h-10 text-[#0F172A]" />
+                  </div>
+                  <h3 className="text-base font-display font-bold text-[#0F172A] mb-2 font-sans">Personal Private Vault vacant</h3>
+                  <p className="text-xs text-[#64748B] leading-normal max-w-md mx-auto mb-6 font-sans">
+                    Select a topic filter tab or write a new document notes. You can also import curated materials from the Resource Hub with the Save button.
+                  </p>
+                  <div className="flex flex-wrap gap-3 items-center justify-center">
+                    <button
+                      onClick={() => setIsFormOpen(true)}
+                      className="px-4 py-2 text-xs font-semibold text-white bg-[#0F172A] hover:bg-[#1E293B] rounded-xl transition-all shadow-sm select-none cursor-pointer font-sans"
+                      lg-id="empty-create-btn"
+                    >
+                      Index New Material
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('hub')}
+                      className="px-4 py-2 text-xs font-semibold text-[#0F172A] hover:bg-[#F8FAFC] border border-[#E5E7EB] rounded-xl transition-colors bg-white select-none cursor-pointer font-sans"
+                      lg-id="empty-go-hub"
+                    >
+                      Browse Curator Materials
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : (
+              filteredHub.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in" id="hub_cards_grid">
+                  {filteredHub.map(res => (
+                    <ResourceCard
+                      key={res.id}
+                      item={res}
+                      origin="hub"
+                      onDelete={handleDeleteHub}
+                      onImport={handleImportHubItem}
+                      isAdmin={currentUser.role === 'admin'}
+                      folders={folders}
+                      onEdit={handleEditClick}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-12 text-center bg-white border border-[#E5E7EB] rounded-2xl min-h-[300px] shadow-sm" id="empty_hub_vault">
+                  <div className="p-4 bg-[#F8FAFC] border border-[#E5E7EB] rounded-2xl text-[#0F172A] mb-4 shadow-sm">
+                    <BookOpen className="w-10 h-10 text-slate-700" />
+                  </div>
+                  <h3 className="text-base font-display font-bold text-[#0F172A] mb-2 font-sans">Curated Hub vacancy</h3>
+                  <p className="text-xs text-[#64748B] leading-normal max-w-md mx-auto mb-6 font-sans">
+                    Mentors have not published any materials matching this category selection yet.
+                  </p>
+                  {currentUser.role === 'admin' && (
+                    <button
+                      onClick={() => {
+                        setEditingItem(null);
+                        setIsFormOpen(true);
+                      }}
+                      className="px-4 py-2 text-xs font-semibold text-white bg-[#0F172A] hover:bg-[#1E293B] rounded-xl transition-all shadow-sm select-none cursor-pointer inline-flex items-center gap-1.5 font-sans"
+                      lg-id="admin-seed-hub-btn"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Upload Expert Curation
+                    </button>
+                  )}
+                </div>
+              )
+            )}
+          </div>
+        </div>
+
+        {/* Short documentation explanation panel */}
+        <section className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm" id="security_disclosure_footer">
+          <h3 className="text-xs font-mono text-[#0F172A] uppercase tracking-widest mb-4 flex items-center gap-1.5">
+            <ClipboardList className="w-4 h-4 text-slate-550" />
+            Security Paradigm & Zero-Trust Guidelines
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs font-sans text-[#64748B] leading-relaxed">
+            <div className="space-y-3">
+              <p>
+                <strong className="text-[#0F172A] font-bold">1. Client-Side Cryptography (Isolators):</strong> Grounded references are cryptographically mapped using individual browser-side PBKDF2 derived keys. This prevents administrator override or direct database scraping.
+              </p>
+              <p>
+                <strong className="text-[#0F172A] font-bold">2. Google Passwordless Sign-In:</strong> Integrates Google authenticator tokens that initialize accounts instantly with zero password overhead.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <p>
+                <strong className="text-[#0F172A] font-bold">3. Mentor Authority Gates:</strong> Only administrators whose accounts match whitelists (such as <code>raksha05jk.rao@gmail.com</code>) can create or remove indices from the community shared Resource Hub.
+              </p>
+              <p>
+                <strong className="text-[#0F172A] font-bold">4. Unified Sync Syncing:</strong> Real-time changes are synchronized atomically. Any pasted notes from your Imperial Notes desk are synchronized into folders immediately.
+              </p>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      {/* Floating Resource Creator Modal Form overlay */}
+      {isFormOpen && (
+        <ResourceForm
+          onClose={() => {
+            setIsFormOpen(false);
+            setEditingItem(null);
+          }}
+          onSavePersonal={handleSavePersonal}
+          onSaveHub={handleSaveHub}
+          isAdmin={currentUser.role === 'admin'}
+          currentUserDisplayName={currentUser.displayName}
+          folders={folders}
+          initialItem={editingItem}
+        />
+      )}
+
+      {/* Primary footer */}
+      <footer className="mt-auto py-8 bg-white text-center border-t border-[#E5E7EB] text-xs text-[#64748B] font-mono">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <span>UPSC Personal Vault Network &copy; 2026. Custom encrypted storage for civil services preparation.</span>
+          <div className="flex items-center gap-1">
+            <span>Powered by</span>
+            <span className="text-[#0F172A] font-bold">Gemini AI Studio</span>
+          </div>
+        </div>
+      </footer>
+
+    </div>
+  );
+}

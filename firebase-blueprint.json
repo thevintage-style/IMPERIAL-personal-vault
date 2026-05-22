@@ -1,0 +1,142 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and roles",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique Firebase Authentication UID"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User photo URL"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "admin"],
+          "description": "Access control role"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when user signed up"
+        }
+      },
+      "required": ["uid", "email", "displayName", "role", "createdAt"]
+    },
+    "PersonalResource": {
+      "title": "Personal Resource",
+      "description": "A saved PDF, video, link, or document in the user's personal vault with URL encrypted client-side",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the stored item"
+        },
+        "description": {
+          "type": "string",
+          "description": "User's study notes or summary description"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["pdf", "link", "video", "other"],
+          "description": "Classification of studies"
+        },
+        "url": {
+          "type": "string",
+          "description": "Url of material (encrypted client-side with user-specific keys)"
+        },
+        "category": {
+          "type": "string",
+          "description": "UPSC Category, e.g. GS1, GS2, GS3, GS4, Essay, Current Affairs"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "title", "type", "url", "category", "createdAt", "updatedAt"]
+    },
+    "ResourceHubItem": {
+      "title": "Resource Hub Item",
+      "description": "Curated community educational resource or study materials uploaded by an admin",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Resource title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Notes, syllabus coverage, and curation details"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["pdf", "link", "video", "other"],
+          "description": "Format type"
+        },
+        "url": {
+          "type": "string",
+          "description": "Resource URL (encrypted client-side for cloud privacy)"
+        },
+        "category": {
+          "type": "string",
+          "description": "UPSC Syllabi categorization"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the creating admin"
+        },
+        "createdByName": {
+          "type": "string",
+          "description": "Name of the creating admin"
+        }
+      },
+      "required": ["id", "title", "type", "url", "category", "createdAt", "createdBy", "createdByName"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User details and role metadata"
+    },
+    "users/{userId}/personal_resources/{resourceId}": {
+      "schema": "PersonalResource",
+      "description": "Study resources inside an individual user's personal vault"
+    },
+    "resource_hub/{resourceId}": {
+      "schema": "ResourceHubItem",
+      "description": "Curated, shared UPSC resources uploaded exclusively by authorized administrators"
+    },
+    "admins/{adminId}": {
+      "schema": "object",
+      "description": "Whitelist table identifying which users are system administrators"
+    }
+  }
+}
