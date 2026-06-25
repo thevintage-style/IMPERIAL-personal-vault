@@ -30,6 +30,8 @@ interface ResourceCardProps {
   folders: Folder[];
   onEdit?: (item: any) => void;
   onMoveFolder?: (itemId: string, folderId: string) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string, checked: boolean) => void;
 }
 
 export default function ResourceCard({
@@ -40,7 +42,9 @@ export default function ResourceCard({
   isAdmin,
   folders,
   onEdit,
-  onMoveFolder
+  onMoveFolder,
+  isSelected = false,
+  onToggleSelect
 }: ResourceCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
@@ -141,7 +145,19 @@ export default function ResourceCard({
 
         <div className="flex items-start justify-between gap-3 mb-4">
           {/* Category Badge & Encryption Indicator */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            {onToggleSelect && (
+              <div className="flex items-center mr-1">
+                <input 
+                  type="checkbox" 
+                  checked={isSelected}
+                  onChange={(e) => onToggleSelect(item.id, e.target.checked)}
+                  id={`checkbox_${item.id}`}
+                  className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500 cursor-pointer transition-all accent-slate-950"
+                  aria-label={`Select ${item.title}`}
+                />
+              </div>
+            )}
             <span className={`text-[10px] font-mono px-2.5 py-1 rounded-full border tracking-wide uppercase ${
               origin === 'hub' 
                 ? 'bg-[#F8FAFC] text-slate-700 border-[#E5E7EB]' 
@@ -149,10 +165,12 @@ export default function ResourceCard({
             }`}>
               {item.category}
             </span>
-            <span className="flex items-center gap-1 text-[10px] font-mono text-emerald-700 bg-emerald-50/65 px-2 py-0.5 rounded border border-emerald-100" title="Decrypted inside client sandbox browser safely.">
-              <ShieldCheck className="w-3 h-3" />
-              AES Secured
-            </span>
+            {isAdmin && (
+              <span className="flex items-center gap-1 text-[10px] font-mono text-emerald-700 bg-emerald-50/65 px-2 py-0.5 rounded border border-emerald-100" title="Decrypted inside client sandbox browser safely.">
+                <ShieldCheck className="w-3 h-3" />
+                AES Secured
+              </span>
+            )}
             {assignedFolder && (
               <span className="flex items-center gap-1 text-[10px] font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-150 font-bold max-w-[120px] truncate" title={`Assigned to: ${assignedFolder.name}`}>
                 📂 {assignedFolder.name}
@@ -233,7 +251,9 @@ export default function ResourceCard({
               </div>
               <div className="text-left select-none truncate">
                 <span className="text-xs font-bold block truncate text-slate-850">{item.title}.pdf</span>
-                <span className="text-[9px] font-mono text-red-600 font-bold uppercase block mt-0.5 leading-none">SECURE LOCAL ATTACHMENT</span>
+                {isAdmin && (
+                  <span className="text-[9px] font-mono text-red-600 font-bold uppercase block mt-0.5 leading-none">SECURE LOCAL ATTACHMENT</span>
+                )}
               </div>
             </div>
             <a
@@ -256,7 +276,9 @@ export default function ResourceCard({
               </div>
               <div className="text-left select-none truncate">
                 <span className="text-xs font-bold block truncate text-slate-850">{item.title}</span>
-                <span className="text-[9px] font-mono text-slate-500 font-bold uppercase block mt-0.5 leading-none">Scrambled Binary File</span>
+                {isAdmin && (
+                  <span className="text-[9px] font-mono text-slate-500 font-bold uppercase block mt-0.5 leading-none">Scrambled Binary File</span>
+                )}
               </div>
             </div>
             <a
@@ -275,10 +297,10 @@ export default function ResourceCard({
           <div className="mt-4 pt-4 border-t border-[#E5E7EB] space-y-3 text-xs font-sans text-[#64748B]">
             {item.type !== 'photo' && item.type !== 'note' && (
               <div className="bg-[#F8FAFC] p-2.5 rounded-xl border border-[#E5E7EB] overflow-x-auto text-left">
-                <span className="font-mono text-[10px] text-[#94A3B8] block mb-1">Decrypted Target Location:</span>
+                <span className="font-mono text-[10px] text-[#94A3B8] block mb-1">{isAdmin ? "Decrypted Target Location:" : "Resource Link:"}</span>
                 {item.url.startsWith('data:') ? (
                   <span className="text-emerald-700 font-mono text-xs font-bold block select-all">
-                    📁 Scrambled Client-side Encrypted Binary Asset ({((item.url.length * 0.75) / 1024).toFixed(1)} KB)
+                    📁 {isAdmin ? `Scrambled Client-side Encrypted Binary Asset (${((item.url.length * 0.75) / 1024).toFixed(1)} KB)` : "Local Attachment"}
                   </span>
                 ) : (
                   <a 

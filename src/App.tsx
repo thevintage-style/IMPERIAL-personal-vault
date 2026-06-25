@@ -67,6 +67,9 @@ export default function App() {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
+  // Multi-select and Batch Operations State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
   // Subscribe to Authentication transitions
   useEffect(() => {
     const unsubscribe = subscribeToAuth((user) => {
@@ -111,6 +114,11 @@ export default function App() {
     });
     return () => unsubscribe();
   }, [currentUser]);
+
+  // Clear selection on filter and tab updates
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [activeTab, selectedCategory, selectedType, selectedFolderId, searchQuery]);
 
   // Handle Authentication trigger
   const handleSignIn = async () => {
@@ -239,6 +247,64 @@ export default function App() {
     }
   };
 
+  // Batch delete multiple items
+  const handleBatchDelete = async (ids: string[]) => {
+    if (!currentUser) return;
+    const count = ids.length;
+    const msg = activeTab === 'personal'
+      ? `Are you sure you want to permanently delete the ${count} selected study resource(s) from your Private Vault?`
+      : `Are you sure you want to permanently delete the ${count} selected shared item(s) from the public Resource Hub?`;
+      
+    if (confirm(msg)) {
+      try {
+        if (activeTab === 'personal') {
+          for (const id of ids) {
+            await deletePersonalResource(currentUser.uid, id);
+          }
+        } else {
+          if (currentUser.role !== 'admin') return;
+          for (const id of ids) {
+            await deleteResourceHubItem(id);
+          }
+        }
+        setSelectedIds([]);
+      } catch (err) {
+        console.error("Batch deletion failed:", err);
+      }
+    }
+  };
+
+  // Batch move multiple items to a folder
+  const handleBatchMoveFolder = async (ids: string[], targetFolderId: string) => {
+    if (!currentUser) return;
+    try {
+      const updatedFolderId = targetFolderId === 'unassigned' ? '' : targetFolderId;
+      for (const id of ids) {
+        const item = personalResources.find(x => x.id === id);
+        if (item) {
+          await savePersonalResource(currentUser.uid, {
+            title: item.title,
+            description: item.description,
+            type: item.type,
+            url: item.url,
+            category: item.category,
+            folderId: updatedFolderId
+          }, item.id);
+        }
+      }
+      setSelectedIds([]);
+    } catch (err) {
+      console.error("Batch folder migration failed:", err);
+    }
+  };
+
+  // Toggle selection for a single resource item
+  const handleToggleSelect = (id: string, checked: boolean) => {
+    setSelectedIds(prev => 
+      checked ? [...prev, id] : prev.filter(x => x !== id)
+    );
+  };
+
   // Filtering Logic
   const filteredPersonal = useMemo(() => {
     return personalResources.filter(res => {
@@ -271,14 +337,16 @@ export default function App() {
       if (personalResources.length === 0) {
         return "💡 Tip: Your private vault is currently empty! Use the '+ Index Study Material' button at the top to secure your first PDF, Photo post or YouTube lecture.";
       }
-      return `📊 Displaying ${filteredPersonal.length} of ${personalResources.length} personalized assets. All URLs and Photos are AES-256 decrypted in-memory inside your local web-isolated workspace.`;
+      return currentUser && currentUser.role === 'admin'
+        ? `📊 Displaying ${filteredPersonal.length} of ${personalResources.length} personalized assets. All URLs and Photos are AES-256 decrypted in-memory inside your local web-isolated workspace.`
+        : `📊 Displaying ${filteredPersonal.length} of ${personalResources.length} personalized study materials.`;
     } else {
       if (hubResources.length === 0) {
         return "🕒 The Shared Curation Hub is waiting for expert content uploads. Only admins can initialize these study boards.";
       }
       return "🤝 Hint: Browse verified curations by mentors. Hover over a study block and click 'Save' to import and encrypt it into your private vault.";
     }
-  }, [activeTab, personalResources, hubResources, filteredPersonal, filteredHub]);
+  }, [activeTab, personalResources, hubResources, filteredPersonal, filteredHub, currentUser]);
 
   if (isAuthLoading) {
     return (
@@ -405,7 +473,7 @@ export default function App() {
     <div className="min-h-screen bg-[#F8F9FA] text-[#1A1A1A] flex flex-col font-sans" id="authenticated_dashboard_root">
       
       {/* ⚠️ Sandbox Mode Warning banner */}
-      {isLocalSandbox && (
+      {isLocalSandbox && currentUser.role === 'admin' && (
         <div className="bg-amber-50 border-b border-amber-200 py-3 px-4 text-xs font-sans text-amber-900 shadow-sm flex items-center justify-between" id="local_sandbox_ribbon">
           <div className="max-w-7xl mx-auto w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5">
@@ -836,6 +904,49 @@ export default function App() {
 
           {/* Right/Central: GRID OF DATA CARDS */}
           <div className="flex-1 w-full" id="cards_grid_wrapper">
+            {/* Multi-select Header Control Bar */}
+            {((activeTab === 'personal' && filteredPersonal.length > 0) || (activeTab === 'hub' && filteredHub.length > 0)) && (
+              <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 mb-6 flex flex-wrap items-center justify-between gap-3 shadow-sm" id="multi_select_header_bar">
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="checkbox" 
+                    checked={
+                      activeTab === 'personal' 
+                        ? filteredPersonal.length > 0 && selectedIds.length === filteredPersonal.length 
+                        : filteredHub.length > 0 && selectedIds.length === filteredHub.length
+                    }
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const visibleIds = activeTab === 'personal' 
+                          ? filteredPersonal.map(x => x.id) 
+                          : filteredHub.map(x => x.id);
+                        setSelectedIds(visibleIds);
+                      } else {
+                        setSelectedIds([]);
+                      }
+                    }}
+                    id="select_all_checkbox"
+                    className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500 cursor-pointer accent-slate-950"
+                  />
+                  <label htmlFor="select_all_checkbox" className="text-xs font-medium text-slate-700 cursor-pointer select-none font-sans">
+                    Select All Shown ({activeTab === 'personal' ? filteredPersonal.length : filteredHub.length} items)
+                  </label>
+                </div>
+
+                {selectedIds.length > 0 && (
+                  <div className="flex items-center gap-2 text-xs text-slate-500 font-sans">
+                    <span className="font-semibold text-slate-950 bg-slate-100 px-2.5 py-0.5 rounded-full">{selectedIds.length} selected</span>
+                    <button 
+                      onClick={() => setSelectedIds([])}
+                      className="text-indigo-650 hover:text-indigo-800 underline font-semibold cursor-pointer"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === 'personal' ? (
               filteredPersonal.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in" id="personal_grid_cards">
@@ -849,6 +960,8 @@ export default function App() {
                       folders={folders}
                       onEdit={handleEditClick}
                       onMoveFolder={handleMoveFolder}
+                      isSelected={selectedIds.includes(res.id)}
+                      onToggleSelect={handleToggleSelect}
                     />
                   ))}
                 </div>
@@ -892,6 +1005,8 @@ export default function App() {
                       isAdmin={currentUser.role === 'admin'}
                       folders={folders}
                       onEdit={handleEditClick}
+                      isSelected={selectedIds.includes(res.id)}
+                      onToggleSelect={handleToggleSelect}
                     />
                   ))}
                 </div>
@@ -924,30 +1039,32 @@ export default function App() {
         </div>
 
         {/* Short documentation explanation panel */}
-        <section className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm" id="security_disclosure_footer">
-          <h3 className="text-xs font-mono text-[#0F172A] uppercase tracking-widest mb-4 flex items-center gap-1.5">
-            <ClipboardList className="w-4 h-4 text-slate-550" />
-            Security Paradigm & Zero-Trust Guidelines
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs font-sans text-[#64748B] leading-relaxed">
-            <div className="space-y-3">
-              <p>
-                <strong className="text-[#0F172A] font-bold">1. Client-Side Cryptography (Isolators):</strong> Grounded references are cryptographically mapped using individual browser-side PBKDF2 derived keys. This prevents administrator override or direct database scraping.
-              </p>
-              <p>
-                <strong className="text-[#0F172A] font-bold">2. Google Passwordless Sign-In:</strong> Integrates Google authenticator tokens that initialize accounts instantly with zero password overhead.
-              </p>
+        {currentUser.role === 'admin' && (
+          <section className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm" id="security_disclosure_footer">
+            <h3 className="text-xs font-mono text-[#0F172A] uppercase tracking-widest mb-4 flex items-center gap-1.5">
+              <ClipboardList className="w-4 h-4 text-slate-550" />
+              Security Paradigm & Zero-Trust Guidelines
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs font-sans text-[#64748B] leading-relaxed">
+              <div className="space-y-3">
+                <p>
+                  <strong className="text-[#0F172A] font-bold">1. Client-Side Cryptography (Isolators):</strong> Grounded references are cryptographically mapped using individual browser-side PBKDF2 derived keys. This prevents administrator override or direct database scraping.
+                </p>
+                <p>
+                  <strong className="text-[#0F172A] font-bold">2. Google Passwordless Sign-In:</strong> Integrates Google authenticator tokens that initialize accounts instantly with zero password overhead.
+                </p>
+              </div>
+              <div className="space-y-3">
+                <p>
+                  <strong className="text-[#0F172A] font-bold">3. Mentor Authority Gates:</strong> Only administrators whose accounts match whitelists (such as <code>raksha05jk.rao@gmail.com</code>) can create or remove indices from the community shared Resource Hub.
+                </p>
+                <p>
+                  <strong className="text-[#0F172A] font-bold">4. Unified Sync Syncing:</strong> Real-time changes are synchronized atomically. Any pasted notes from your Imperial Notes desk are synchronized into folders immediately.
+                </p>
+              </div>
             </div>
-            <div className="space-y-3">
-              <p>
-                <strong className="text-[#0F172A] font-bold">3. Mentor Authority Gates:</strong> Only administrators whose accounts match whitelists (such as <code>raksha05jk.rao@gmail.com</code>) can create or remove indices from the community shared Resource Hub.
-              </p>
-              <p>
-                <strong className="text-[#0F172A] font-bold">4. Unified Sync Syncing:</strong> Real-time changes are synchronized atomically. Any pasted notes from your Imperial Notes desk are synchronized into folders immediately.
-              </p>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
       </main>
 
@@ -977,6 +1094,56 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* 🌟 Floating Multi-Select Action Bar */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-xl z-50 flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-800 transition-all duration-300 max-w-[90vw] sm:max-w-xl w-full" id="floating_action_bar">
+          <div className="flex items-center gap-2">
+            <span className="bg-white/15 text-white px-2.5 py-0.5 rounded-lg text-xs font-bold font-mono">
+              {selectedIds.length} Selected
+            </span>
+            <span className="text-xs text-slate-400 font-sans">Batch actions</span>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            {activeTab === 'personal' && (
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleBatchMoveFolder(selectedIds, e.target.value);
+                    e.target.value = '';
+                  }
+                }}
+                className="bg-slate-800 hover:bg-slate-750 text-white text-xs px-3 py-2 rounded-xl outline-none cursor-pointer border border-slate-700 font-sans w-full sm:w-auto"
+                defaultValue=""
+              >
+                <option value="" disabled>📁 Move to Folder...</option>
+                <option value="unassigned">📂 Unassigned Folder</option>
+                {folders.map(folder => (
+                  <option key={folder.id} value={folder.id}>
+                    📂 {folder.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <button
+              onClick={() => handleBatchDelete(selectedIds)}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 font-semibold transition-all cursor-pointer font-sans whitespace-nowrap"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </button>
+
+            <button
+              onClick={() => setSelectedIds([])}
+              className="text-slate-400 hover:text-white text-xs px-2.5 py-2 transition-colors cursor-pointer font-sans"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

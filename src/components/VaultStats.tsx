@@ -32,7 +32,7 @@ export default function VaultStats({
   });
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 mt-2" id="vault_stats_section">
+    <div className={`grid grid-cols-1 ${currentUserRole === 'admin' ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6 mb-8 mt-2`} id="vault_stats_section">
       {/* 2. Primary Metrics Block */}
       <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col justify-between" id="metric_card_totals">
         <div>
@@ -89,8 +89,8 @@ export default function VaultStats({
                 </div>
                 <div className="h-1.5 w-full bg-[#F1F5F9] rounded-full overflow-hidden">
                   <div 
-                    className="h-full rounded-full transition-all duration-500 bg-[#0F172A]" 
-                    style={{ width: `${Math.min(stat.total * 20, 100)}%` }} // 5 items fills a category full bar
+                     className="h-full rounded-full transition-all duration-500 bg-[#0F172A]" 
+                     style={{ width: `${Math.min(stat.total * 20, 100)}%` }} // 5 items fills a category full bar
                   />
                 </div>
               </div>
@@ -100,29 +100,31 @@ export default function VaultStats({
       </div>
 
       {/* 🔒 Encryption Shield Bento Grid */}
-      <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col justify-between" id="metric_security_integrity">
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-[#94A3B8] tracking-widest uppercase">Vault Security</span>
-            <div className="p-1.5 bg-[#F1F5F9] rounded-xl text-[#0F172A] border border-[#E5E7EB]">
-              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+      {currentUserRole === 'admin' && (
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col justify-between" id="metric_security_integrity">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-[#94A3B8] tracking-widest uppercase">Vault Security</span>
+              <div className="p-1.5 bg-[#F1F5F9] rounded-xl text-[#0F172A] border border-[#E5E7EB]">
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+              </div>
             </div>
-          </div>
-          <p className="text-xs text-[#64748B] leading-relaxed font-sans mb-3">
-            All stored material listings are encrypted client-side using robust <strong className="text-[#0F172A]">AES-256 GCM</strong> before writing to Firestore.
-          </p>
-          <div className="grid grid-cols-2 gap-1.5 bg-[#F8F9FA] border border-[#E5E7EB] rounded-xl p-3 text-[11px] font-mono">
-            <div className="text-[#64748B]">Engine:</div>
-            <div className="text-emerald-700 font-bold text-right">WebCrypto API</div>
-            <div className="text-[#64748B]">Database:</div>
-            <div className="text-[#0F172A] text-right font-medium">
-              {isSandbox ? "Sandbox Local" : "Firestore Cloud"}
+            <p className="text-xs text-[#64748B] leading-relaxed font-sans mb-3">
+              All stored material listings are encrypted client-side using robust <strong className="text-[#0F172A]">AES-256 GCM</strong> before writing to Firestore.
+            </p>
+            <div className="grid grid-cols-2 gap-1.5 bg-[#F8F9FA] border border-[#E5E7EB] rounded-xl p-3 text-[11px] font-mono">
+              <div className="text-[#64748B]">Engine:</div>
+              <div className="text-emerald-700 font-bold text-right">WebCrypto API</div>
+              <div className="text-[#64748B]">Database:</div>
+              <div className="text-[#0F172A] text-right font-medium">
+                {isSandbox ? "Sandbox Local" : "Firestore Cloud"}
+              </div>
+              <div className="text-[#64748B]">Privilege:</div>
+              <div className="text-right text-[#0F172A] font-bold uppercase">{currentUserRole}</div>
             </div>
-            <div className="text-[#64748B]">Privilege:</div>
-            <div className="text-right text-[#0F172A] font-bold uppercase">{currentUserRole}</div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

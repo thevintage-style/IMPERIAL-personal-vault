@@ -97,9 +97,9 @@ export default function ResourceForm({
     }
 
     // Size limit
-    const maxSize = 2.5 * 1024 * 1024; // 2.5MB
+    const maxSize = 35 * 1024 * 1024; // 35MB
     if (file.size > maxSize) {
-      setError(`Your file (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 2.5MB. UPSC SafeVault files are restricted to max 2.5MB to secure instant local decrypt times. For larger files, prefer Google Drive pointers using 'Web Address Link' mode.`);
+      setError(`Your file (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 35MB. UPSC SafeVault files are restricted to max 35MB. For larger files, prefer Google Drive pointers using 'Web Address Link' mode.`);
       return;
     }
 
@@ -518,13 +518,13 @@ export default function ResourceForm({
                           ? 'Supports standard PDF documents' 
                           : type === 'video' 
                             ? 'Supports MP4, MOV, WEBM lectures' 
-                            : 'All formats supported'} (Max 2.5MB)
+                            : 'All formats supported'} (Max 35MB)
                     </p>
                   </div>
                 )}
               </div>
               <p className="text-[9px] text-[#64748B] font-mono leading-relaxed">
-                🔒 Your file is scrambled locally inside your web-isolated browser into encrypted binary streams before syncing. Safe from direct administrative inspection.
+                {isAdmin ? "🔒 Your file is scrambled locally inside your web-isolated browser into encrypted binary streams before syncing. Safe from direct administrative inspection." : "🔒 Your file is uploaded securely to your private vault."}
               </p>
             </div>
           ) : (
@@ -546,7 +546,7 @@ export default function ResourceForm({
                 id="field_url"
               />
               <p className="text-[10px] text-[#94A3B8] font-mono italic">
-                🔐 255-bit client scrambled before pushing cloud-database. Hidden from direct scrapers.
+                {isAdmin ? "🔐 255-bit client scrambled before pushing cloud-database. Hidden from direct scrapers." : "🔐 Secured link."}
               </p>
             </div>
           )}

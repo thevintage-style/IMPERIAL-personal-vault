@@ -21,6 +21,7 @@ import {
 import { db, auth, isLocalSandbox, OperationType, handleFirestoreError } from './firebase';
 import { PersonalResource, ResourceHubItem, UserProfile } from '../types';
 import { encryptText, decryptText } from './encryption';
+import { saveLargeFile, getLargeFile, deleteLargeFile } from './largeFileStorage';
 
 // Standard encryption passphrases
 // 1. Personal Private items are encrypted with the user's unique UID: secure passwordless isolate.
@@ -244,8 +245,20 @@ export async function savePersonalResource(
 ): Promise<void> {
   const resourceId = existingId || "user_" + Math.random().toString(36).substring(2, 15);
   
+  // Clean up old IndexedDB file if type changed or URL is not a data URL anymore
+  if (existingId && (!item.url || !item.url.startsWith('data:'))) {
+    await deleteLargeFile(`large_file_${existingId}`);
+  }
+
+  let finalUrl = item.url;
+  if (item.url && item.url.startsWith('data:')) {
+    const fileKey = `large_file_${resourceId}`;
+    await saveLargeFile(fileKey, item.url);
+    finalUrl = `largefile:${fileKey}`;
+  }
+
   // 🔒 Client-Side Encryption: Encrypt private url field with User's specific UID
-  const encryptedUrl = await encryptText(item.url, userId);
+  const encryptedUrl = await encryptText(finalUrl, userId);
   
   if (!isLocalSandbox) {
     const docPath = `users/${userId}/personal_resources/${resourceId}`;
@@ -304,6 +317,7 @@ export async function savePersonalResource(
  * Remove an item from the candidate's personal space
  */
 export async function deletePersonalResource(userId: string, resourceId: string): Promise<void> {
+  await deleteLargeFile(`large_file_${resourceId}`);
   if (!isLocalSandbox) {
     const docPath = `users/${userId}/personal_resources/${resourceId}`;
     try {
@@ -334,6 +348,14 @@ export async function decryptPersonalResources(rawItems: any[], userUid: string)
     if (raw.url && raw.url.startsWith("ENC:")) {
       plainUrl = await decryptText(raw.url, userUid);
       isDecrypted = true;
+    }
+    
+    if (plainUrl && plainUrl.startsWith("largefile:")) {
+      const fileKey = plainUrl.replace("largefile:", "");
+      const localDataUrl = await getLargeFile(fileKey);
+      if (localDataUrl) {
+        plainUrl = localDataUrl;
+      }
     }
     
     return {
@@ -399,8 +421,20 @@ export async function saveResourceHubItem(
 ): Promise<void> {
   const hubId = existingId || "hub_" + Math.random().toString(36).substring(2, 15);
   
+  // Clean up old IndexedDB file if type changed or URL is not a data URL anymore
+  if (existingId && (!item.url || !item.url.startsWith('data:'))) {
+    await deleteLargeFile(`large_file_${existingId}`);
+  }
+
+  let finalUrl = item.url;
+  if (item.url && item.url.startsWith('data:')) {
+    const fileKey = `large_file_${hubId}`;
+    await saveLargeFile(fileKey, item.url);
+    finalUrl = `largefile:${fileKey}`;
+  }
+  
   // 🔒 Client-Side Encryption: Encrypt with Shared Community Key to lock cloud index databases
-  const encryptedUrl = await encryptText(item.url, COMMUNITY_HUB_PASSPHRASE);
+  const encryptedUrl = await encryptText(finalUrl, COMMUNITY_HUB_PASSPHRASE);
   
   if (!isLocalSandbox) {
     const docPath = `resource_hub/${hubId}`;
@@ -458,6 +492,7 @@ export async function saveResourceHubItem(
  * Remove an item from the curated Resource Hub (Admins Only)
  */
 export async function deleteResourceHubItem(hubId: string): Promise<void> {
+  await deleteLargeFile(`large_file_${hubId}`);
   if (!isLocalSandbox) {
     const docPath = `resource_hub/${hubId}`;
     try {
@@ -502,6 +537,14 @@ export async function decryptHubResources(rawItems: any[]): Promise<ResourceHubI
     if (plainUrl && plainUrl.startsWith("ENC:")) {
       plainUrl = await decryptText(plainUrl, COMMUNITY_HUB_PASSPHRASE);
       isDecrypted = true;
+    }
+    
+    if (plainUrl && plainUrl.startsWith("largefile:")) {
+      const fileKey = plainUrl.replace("largefile:", "");
+      const localDataUrl = await getLargeFile(fileKey);
+      if (localDataUrl) {
+        plainUrl = localDataUrl;
+      }
     }
     
     return {
