@@ -97,9 +97,9 @@ export default function ResourceForm({
     }
 
     // Size limit
-    const maxSize = 35 * 1024 * 1024; // 35MB
+    const maxSize = 525 * 1024 * 1024; // 525MB (increased 15x from 35MB)
     if (file.size > maxSize) {
-      setError(`Your file (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 35MB. UPSC SafeVault files are restricted to max 35MB. For larger files, prefer Google Drive pointers using 'Web Address Link' mode.`);
+      setError(`Your file (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 525MB. UPSC SafeVault files are restricted to max 525MB. For larger files, prefer Google Drive pointers using 'Web Address Link' mode.`);
       return;
     }
 
@@ -216,13 +216,13 @@ export default function ResourceForm({
         
         {/* Header decoration bar */}
         <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between bg-[#F8FAFC]">
-          <h3 className="text-sm font-display font-bold text-[#0F172A] flex items-center gap-1.5 uppercase tracking-wide">
-            <PlusCircle className="w-5 h-5 text-[#64748B]" />
+          <h3 className="text-sm font-display font-bold text-olive-900 flex items-center gap-1.5 uppercase tracking-wide">
+            <PlusCircle className="w-5 h-5 text-olive-600" />
             {isEditMode ? "Modify Indexed UPSC Material" : "Index UPSC Study Material"}
           </h3>
           <button 
             onClick={onClose} 
-            className="p-1.5 text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded-lg transition-all"
+            className="p-1.5 text-[#94A3B8] hover:text-olive-900 hover:bg-olive-50 rounded-lg transition-all"
             type="button"
             lg-id="close-form-btn"
           >
@@ -243,8 +243,8 @@ export default function ResourceForm({
                   onClick={() => setTargetVault('personal')}
                   className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer ${
                     targetVault === 'personal'
-                      ? 'bg-[#F1F5F9] border-[#0F172A] text-[#0F172A] font-bold'
-                      : 'bg-white border-[#E5E7EB] text-[#64748B] hover:border-[#CBD5E1] hover:text-[#0F172A]'
+                      ? 'bg-olive-50 border-olive-600 text-olive-900 font-bold'
+                      : 'bg-white border-[#E5E7EB] text-[#64748B] hover:border-olive-200 hover:text-olive-900'
                   }`}
                   lg-id="select-personal-dest"
                 >
@@ -264,8 +264,8 @@ export default function ResourceForm({
                     !isAdmin 
                       ? 'opacity-40 bg-[#F8FAFC] border-[#E5E7EB] text-slate-400 cursor-not-allowed'
                       : targetVault === 'hub'
-                        ? 'bg-amber-50/75 border-amber-500 text-amber-900 font-bold'
-                        : 'bg-white border-[#E5E7EB] text-[#64748B] hover:border-[#CBD5E1] hover:text-[#0F172A]'
+                        ? 'bg-olive-50/70 border-olive-600 text-olive-900 font-bold'
+                        : 'bg-white border-[#E5E7EB] text-[#64748B] hover:border-olive-200 hover:text-olive-900'
                   }`}
                   title={!isAdmin ? "Resource Hub uploads are restricted to experts/admins" : "Upload to Public Library"}
                   lg-id="select-hub-dest"
@@ -276,8 +276,8 @@ export default function ResourceForm({
                   <span className="text-[9px] font-mono mt-1 opacity-80">Shared Community Curation</span>
                   {!isAdmin && (
                     <span className="absolute top-1 right-1 flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-olive-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-olive-500"></span>
                     </span>
                   )}
                 </button>
@@ -300,7 +300,7 @@ export default function ResourceForm({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Laxmikanth Chapter 5: Fundamental Rights Mindmap"
-              className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-[#0F172A] rounded-xl px-4 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-colors font-sans"
+              className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-olive-600 rounded-xl px-4 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-colors font-sans"
               required
               id="field_title"
             />
@@ -313,7 +313,7 @@ export default function ResourceForm({
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as ResourceType)}
-                className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-[#0F172A] rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A] outline-none transition-colors cursor-pointer font-sans"
+                className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-olive-600 rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A] outline-none transition-colors cursor-pointer font-sans"
                 id="field_type"
               >
                 <option value="link">🌐 Web Link</option>
@@ -331,7 +331,7 @@ export default function ResourceForm({
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-[#0F172A] rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A] outline-none transition-colors cursor-pointer font-sans"
+                className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-olive-600 rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A] outline-none transition-colors cursor-pointer font-sans"
                 id="field_category"
               >
                 {UPSCCategories.map(cat => (
@@ -350,7 +350,7 @@ export default function ResourceForm({
               <select
                 value={folderId}
                 onChange={(e) => setFolderId(e.target.value)}
-                className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-[#0F172A] rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A] outline-none transition-colors cursor-pointer font-sans"
+                className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-olive-600 rounded-xl px-3 py-2.5 text-xs text-[#1A1A1A] outline-none transition-colors cursor-pointer font-sans"
                 id="field_folder"
               >
                 <option value="">📂 No Custom Folder (Loose Vault File)</option>
@@ -379,11 +379,11 @@ export default function ResourceForm({
                   }}
                   className={`py-1.5 rounded-lg text-xs font-semibold font-sans transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     uploadMethod === 'url'
-                      ? 'bg-white text-[#0F172A] font-bold shadow-xs'
-                      : 'text-[#64748B] hover:text-[#0F172A]'
+                      ? 'bg-white text-olive-900 border border-olive-200 font-bold shadow-xs'
+                      : 'text-[#64748B] hover:text-olive-900'
                   }`}
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                  <ExternalLink className="w-3.5 h-3.5 text-olive-600" />
                   <span>🌍 Web URL Link</span>
                 </button>
                 <button
@@ -397,11 +397,11 @@ export default function ResourceForm({
                   }}
                   className={`py-1.5 rounded-lg text-xs font-semibold font-sans transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     uploadMethod === 'file'
-                      ? 'bg-white text-[#0F172A] font-bold shadow-xs'
-                      : 'text-[#64748B] hover:text-[#0F172A]'
+                      ? 'bg-white text-olive-900 border border-olive-200 font-bold shadow-xs'
+                      : 'text-[#64748B] hover:text-olive-900'
                   }`}
                 >
-                  <Upload className="w-3.5 h-3.5 text-slate-500" />
+                  <Upload className="w-3.5 h-3.5 text-olive-600" />
                   <span>📁 Local File Upload</span>
                 </button>
               </div>
@@ -413,8 +413,8 @@ export default function ResourceForm({
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold text-[#64748B] block uppercase tracking-widest font-sans">Synced Custom Study Note*</label>
-                <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100 font-sans font-bold flex items-center gap-1">
-                  <StickyNote className="w-3.5 h-3.5" />
+                <span className="text-[9px] text-olive-800 bg-olive-50 px-1.5 py-0.2 rounded border border-olive-200 font-sans font-bold flex items-center gap-1">
+                  <StickyNote className="w-3.5 h-3.5 text-olive-650" />
                   Synced Direct Notes
                 </span>
               </div>
@@ -423,7 +423,7 @@ export default function ResourceForm({
                 onChange={(e) => setUrl('NOTE:' + e.target.value)}
                 placeholder="Compose study pointers or paste notes from another note website directly...&#13;Format: Mindmaps, Quotes, and Key points you need to backup and structure within UPSC Categories."
                 rows={8}
-                className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-[#0F172A] rounded-xl px-4 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-colors font-mono resize-y min-h-[160px]"
+                className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-olive-600 rounded-xl px-4 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-colors font-mono resize-y min-h-[160px]"
                 required
                 id="field_custom_note"
               />
@@ -440,8 +440,8 @@ export default function ResourceForm({
               <div 
                 className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer ${
                   dragActive 
-                    ? "border-[#0F172A] bg-slate-50" 
-                    : "border-[#E5E7EB] hover:border-[#CBD5E1]"
+                    ? "border-olive-600 bg-olive-50/50" 
+                    : "border-[#E5E7EB] hover:border-olive-200"
                 }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -508,7 +508,7 @@ export default function ResourceForm({
                     <div className="p-3 bg-[#F8FAFC] border border-[#E5E7EB] rounded-2xl text-[#94A3B8]">
                       <Upload className="w-5 h-5 text-slate-500" />
                     </div>
-                    <p className="text-xs font-medium text-[#0F172A] font-sans">
+                    <p className="text-xs font-medium text-olive-900 font-sans">
                       Select or Drag-and-drop a {type.toUpperCase()} file from your system
                     </p>
                     <p className="text-[10px] text-[#94A3B8] font-mono">
@@ -518,7 +518,7 @@ export default function ResourceForm({
                           ? 'Supports standard PDF documents' 
                           : type === 'video' 
                             ? 'Supports MP4, MOV, WEBM lectures' 
-                            : 'All formats supported'} (Max 35MB)
+                            : 'All formats supported'} (Max 525MB)
                     </p>
                   </div>
                 )}
@@ -541,7 +541,7 @@ export default function ResourceForm({
                       ? "e.g. https://www.youtube.com/watch?v=..." 
                       : "e.g. https://drive.google.com/..."
                 }
-                className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-[#0F172A] rounded-xl px-4 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-colors font-sans"
+                className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-olive-600 rounded-xl px-4 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-colors font-sans"
                 required={type !== 'note' && uploadMethod === 'url'}
                 id="field_url"
               />
@@ -559,7 +559,7 @@ export default function ResourceForm({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g. Covers Fundamental Rights under GS2. Focus on Landmark cases like Kesavananda Bharati."
               rows={3}
-              className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-[#0F172A] rounded-xl px-4 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-colors resize-none font-sans"
+              className="w-full bg-[#F8F9FA] border border-[#E5E7EB] focus:bg-white focus:border-olive-600 rounded-xl px-4 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-colors resize-none font-sans"
               id="field_description"
             />
           </div>
@@ -574,8 +574,8 @@ export default function ResourceForm({
 
           {/* Success indicators */}
           {success && (
-            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center gap-2 font-sans">
-              <CheckCircle className="w-4 h-4 flex-shrink-0 text-emerald-600" />
+            <div className="text-xs text-olive-800 bg-olive-50 border border-olive-200 p-3 rounded-xl flex items-center gap-2 font-sans">
+              <CheckCircle className="w-4 h-4 flex-shrink-0 text-olive-600" />
               <span>Record written and secured! Transitioning workspace...</span>
             </div>
           )}
@@ -586,7 +586,7 @@ export default function ResourceForm({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-semibold text-[#64748B] hover:text-[#0F172A] bg-white border border-[#E5E7EB] hover:bg-[#F1F5F9] rounded-xl transition-colors cursor-pointer font-sans"
+              className="px-4 py-2 text-xs font-semibold text-[#64748B] hover:text-olive-900 bg-white border border-[#E5E7EB] hover:bg-olive-50 rounded-xl transition-colors cursor-pointer font-sans"
               lg-id="cancel-btn"
             >
               Cancel
@@ -594,7 +594,7 @@ export default function ResourceForm({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2.5 text-xs font-bold rounded-xl text-white bg-[#0F172A] hover:bg-[#1E293B] hover:shadow transition-all shadow-md select-none cursor-pointer flex items-center gap-1.5 font-sans"
+              className="px-5 py-2.5 text-xs font-bold rounded-xl text-white bg-olive-700 hover:bg-olive-800 hover:shadow transition-all shadow-md select-none cursor-pointer flex items-center gap-1.5 font-sans"
               lg-id="submit-btn"
             >
               {isSubmitting ? "Securing record..." : isEditMode ? "Update Changes" : "Write to Vault"}

@@ -59,28 +59,28 @@ export default function ResourceCard({
   const getIconAndBg = () => {
     switch (item.type) {
       case 'pdf': return {
-        icon: <FileText className="w-5 h-5 text-red-650" lg-id="pdf-icon" />,
-        bg: 'bg-red-50/70 border border-red-100'
+        icon: <FileText className="w-5 h-5 text-olive-800" lg-id="pdf-icon" />,
+        bg: 'bg-olive-50 border border-olive-200'
       };
       case 'video': return {
-        icon: <Video className="w-5 h-5 text-blue-600" lg-id="video-icon" />,
-        bg: 'bg-blue-50/70 border border-blue-100'
+        icon: <Video className="w-5 h-5 text-emerald-700" lg-id="video-icon" />,
+        bg: 'bg-emerald-50 border border-emerald-150'
       };
       case 'link': return {
-        icon: <LinkIcon className="w-5 h-5 text-emerald-600" lg-id="link-icon" />,
-        bg: 'bg-emerald-50/70 border border-emerald-100'
+        icon: <LinkIcon className="w-5 h-5 text-olive-600" lg-id="link-icon" />,
+        bg: 'bg-olive-50/50 border border-olive-100'
       };
       case 'photo': return {
-        icon: <Camera className="w-5 h-5 text-purple-600" lg-id="photo-icon" />,
-        bg: 'bg-purple-50/70 border border-purple-100'
+        icon: <Camera className="w-5 h-5 text-teal-700" lg-id="photo-icon" />,
+        bg: 'bg-teal-50/50 border border-teal-100'
       };
       case 'note': return {
-        icon: <StickyNote className="w-5 h-5 text-amber-600" lg-id="note-icon" />,
-        bg: 'bg-amber-50/70 border border-amber-100'
+        icon: <StickyNote className="w-5 h-5 text-amber-700" lg-id="note-icon" />,
+        bg: 'bg-amber-50/50 border border-amber-100'
       };
       default: return {
-        icon: <BookOpen className="w-5 h-5 text-amber-600" lg-id="other-icon" />,
-        bg: 'bg-amber-50/70 border border-amber-100'
+        icon: <BookOpen className="w-5 h-5 text-olive-700" lg-id="other-icon" />,
+        bg: 'bg-olive-50 border border-olive-100'
       };
     }
   };
@@ -114,13 +114,13 @@ export default function ResourceCard({
   return (
     <div 
       className={`bg-white border text-[#1A1A1A] transition-all duration-300 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-[#CBD5E1] flex flex-col justify-between ${
-        origin === 'hub' ? 'border-[#E5E7EB] border-l-4 border-l-amber-400 relative' : 'border-[#E5E7EB]'
+        origin === 'hub' ? 'border-[#E5E7EB] border-l-4 border-l-olive-600 relative' : 'border-[#E5E7EB]'
       }`}
       id={`resource_card_${item.id}`}
     >
       {/* Shared tag flag in hub mode */}
       {origin === 'hub' && (
-        <div className="absolute top-4 right-4 bg-amber-50 text-amber-700 text-[9px] font-bold px-2 py-0.5 rounded border border-amber-100 uppercase tracking-wider">
+        <div className="absolute top-4 right-4 bg-olive-50 text-olive-800 text-[9px] font-bold px-2 py-0.5 rounded border border-olive-200 uppercase tracking-wider">
           Expert Hub
         </div>
       )}
@@ -138,7 +138,7 @@ export default function ResourceCard({
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
             />
             <span className="absolute bottom-2 right-2 bg-slate-900/80 text-white text-[9.5px] font-mono px-2 py-0.5 rounded-md flex items-center gap-1 backdrop-blur-xs">
-              <Camera className="w-3 h-3 text-purple-300" /> Image Post
+              <Camera className="w-3 h-3 text-olive-300" /> Image Post
             </span>
           </div>
         )}
@@ -153,7 +153,7 @@ export default function ResourceCard({
                   checked={isSelected}
                   onChange={(e) => onToggleSelect(item.id, e.target.checked)}
                   id={`checkbox_${item.id}`}
-                  className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500 cursor-pointer transition-all accent-slate-950"
+                  className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-olive-500 cursor-pointer transition-all accent-olive-750"
                   aria-label={`Select ${item.title}`}
                 />
               </div>
@@ -161,18 +161,18 @@ export default function ResourceCard({
             <span className={`text-[10px] font-mono px-2.5 py-1 rounded-full border tracking-wide uppercase ${
               origin === 'hub' 
                 ? 'bg-[#F8FAFC] text-slate-700 border-[#E5E7EB]' 
-                : 'bg-[#F1F5F9] text-indigo-700 border-[#E5E7EB]'
+                : 'bg-olive-50 text-olive-850 border-olive-200'
             }`}>
               {item.category}
             </span>
             {isAdmin && (
-              <span className="flex items-center gap-1 text-[10px] font-mono text-emerald-700 bg-emerald-50/65 px-2 py-0.5 rounded border border-emerald-100" title="Decrypted inside client sandbox browser safely.">
-                <ShieldCheck className="w-3 h-3" />
+              <span className="flex items-center gap-1 text-[10px] font-mono text-olive-750 bg-olive-50/65 px-2 py-0.5 rounded border border-olive-200" title="Decrypted inside client sandbox browser safely.">
+                <ShieldCheck className="w-3 h-3 text-olive-650" />
                 AES Secured
               </span>
             )}
             {assignedFolder && (
-              <span className="flex items-center gap-1 text-[10px] font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-150 font-bold max-w-[120px] truncate" title={`Assigned to: ${assignedFolder.name}`}>
+              <span className="flex items-center gap-1 text-[10px] font-mono text-olive-800 bg-olive-50 px-2 py-0.5 rounded border border-olive-200 font-bold max-w-[120px] truncate" title={`Assigned to: ${assignedFolder.name}`}>
                 📂 {assignedFolder.name}
               </span>
             )}
@@ -272,7 +272,7 @@ export default function ResourceCard({
           <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3 shadow-xs font-sans text-left">
             <div className="flex items-center gap-2.5 truncate">
               <div className="p-2 bg-slate-100 rounded-lg text-slate-700 flex-shrink-0">
-                <BookOpen className="w-4 h-4 text-indigo-650" />
+                <BookOpen className="w-4 h-4 text-olive-650" />
               </div>
               <div className="text-left select-none truncate">
                 <span className="text-xs font-bold block truncate text-slate-850">{item.title}</span>
@@ -299,7 +299,7 @@ export default function ResourceCard({
               <div className="bg-[#F8FAFC] p-2.5 rounded-xl border border-[#E5E7EB] overflow-x-auto text-left">
                 <span className="font-mono text-[10px] text-[#94A3B8] block mb-1">{isAdmin ? "Decrypted Target Location:" : "Resource Link:"}</span>
                 {item.url.startsWith('data:') ? (
-                  <span className="text-emerald-700 font-mono text-xs font-bold block select-all">
+                  <span className="text-olive-750 font-mono text-xs font-bold block select-all">
                     📁 {isAdmin ? `Scrambled Client-side Encrypted Binary Asset (${((item.url.length * 0.75) / 1024).toFixed(1)} KB)` : "Local Attachment"}
                   </span>
                 ) : (
@@ -307,7 +307,7 @@ export default function ResourceCard({
                     href={item.url} 
                     target="_blank" 
                     rel="noreferrer" 
-                    className="text-indigo-600 hover:underline font-mono break-all inline-flex items-center gap-1.5 cursor-pointer"
+                    className="text-olive-700 hover:text-olive-900 hover:underline font-mono break-all inline-flex items-center gap-1.5 cursor-pointer"
                   >
                     {item.url}
                     <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
@@ -317,7 +317,7 @@ export default function ResourceCard({
             )}
             {item.description && (
               <div className="bg-[#F8FAFC] p-2.5 rounded-xl border border-[#E5E7EB] text-left">
-                <span className="font-mono text-[10px] text-[#0F172A] block mb-1 font-bold">Notes & Syllabus Context:</span>
+                <span className="font-mono text-[10px] text-olive-900 block mb-1 font-bold">Notes & Syllabus Context:</span>
                 <p className="whitespace-pre-line leading-relaxed text-[#1A1A1A]">{item.description}</p>
               </div>
             )}
@@ -335,7 +335,7 @@ export default function ResourceCard({
         <div className="flex items-center gap-2">
           <button 
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-xs font-mono text-[#64748B] hover:text-[#0F172A] flex items-center gap-1 transition-colors cursor-pointer mr-1"
+            className="text-xs font-mono text-[#64748B] hover:text-olive-900 flex items-center gap-1 transition-colors cursor-pointer mr-1"
             lg-id={`expand_btn_${item.id}`}
             type="button"
           >
@@ -354,12 +354,12 @@ export default function ResourceCard({
 
           {/* Inline Folder Relocation select control ("move file / notes") */}
           {origin === 'personal' && onMoveFolder && (
-            <div className="flex items-center gap-1 bg-white border border-[#E5E7EB] rounded-lg px-2 py-1 shadow-xs text-[#64748B] hover:text-[#0F172A] transition-colors relative">
+            <div className="flex items-center gap-1 bg-white border border-[#E5E7EB] rounded-lg px-2 py-1 shadow-xs text-[#64748B] hover:text-olive-900 transition-colors relative">
               <FolderSync className="w-3 h-3 text-slate-500 mr-0.5 flex-shrink-0" />
               <select
                 value={item.folderId || ''}
                 onChange={handleMoveChange}
-                className="text-[10px] font-mono outline-none border-none bg-transparent cursor-pointer font-bold leading-none pr-1 max-w-[85px] truncate"
+                className="text-[10px] font-mono outline-none border-none bg-transparent cursor-pointer font-bold leading-none pr-1 max-w-[85px] truncate text-olive-850"
                 title="Move file to another folder"
               >
                 <option value="">Move folder ...</option>
@@ -380,7 +380,7 @@ export default function ResourceCard({
           {onEdit && (origin === 'personal' || (origin === 'hub' && isAdmin)) && (
             <button
               onClick={() => onEdit(item)}
-              className="p-1.5 text-[#64748B] hover:text-indigo-600 bg-white hover:bg-indigo-50 border border-[#E5E7EB] hover:border-indigo-200 rounded-lg transition-colors outline-none cursor-pointer shadow-sm"
+              className="p-1.5 text-[#64748B] hover:text-olive-700 bg-white hover:bg-olive-50 border border-olive-200 hover:border-olive-300 rounded-lg transition-colors outline-none cursor-pointer shadow-sm"
               title="Edit file / notes"
             >
               <FileEdit className="w-3.5 h-3.5" />
@@ -394,8 +394,8 @@ export default function ResourceCard({
               disabled={isCopied}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-all outline-none cursor-pointer ${
                 isCopied 
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
-                  : 'bg-[#0F172A] hover:bg-[#1E293B] hover:shadow text-white'
+                  ? 'bg-olive-50 text-olive-800 border border-olive-200' 
+                  : 'bg-olive-700 hover:bg-olive-800 hover:shadow text-white'
               }`}
               title="Copy this curated study material to your Personal Vault!"
               lg-id={`import_btn_${item.id}`}
@@ -432,7 +432,7 @@ export default function ResourceCard({
               <a
                 href={item.url}
                 download={item.title + (item.type === 'pdf' ? '.pdf' : item.type === 'video' ? '.mp4' : '')}
-                className="p-1.5 text-indigo-700 hover:text-[#0F172A] bg-indigo-50 hover:bg-[#F1F5F9] border border-indigo-150 rounded-lg transition-colors outline-none shadow-sm flex items-center justify-center cursor-pointer"
+                className="p-1.5 text-olive-800 hover:text-olive-950 bg-olive-50 hover:bg-olive-100 border border-olive-200 rounded-lg transition-colors outline-none shadow-sm flex items-center justify-center cursor-pointer"
                 title="Download secure local attachment"
                 lg-id={`download_btn_${item.id}`}
               >
@@ -443,7 +443,7 @@ export default function ResourceCard({
                 href={item.url}
                 target="_blank"
                 rel="noreferrer"
-                className="p-1.5 text-[#64748B] hover:text-[#0F172A] bg-white hover:bg-[#F1F5F9] border border-[#E5E7EB] rounded-lg transition-colors outline-none shadow-sm flex items-center justify-center cursor-pointer"
+                className="p-1.5 text-[#64748B] hover:text-olive-900 bg-white hover:bg-[#F1F5F9] border border-[#E5E7EB] rounded-lg transition-colors outline-none shadow-sm flex items-center justify-center cursor-pointer"
                 title="Launch resource study page"
                 lg-id={`launch_btn_${item.id}`}
               >

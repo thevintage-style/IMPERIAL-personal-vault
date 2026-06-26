@@ -5,6 +5,18 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Outfit", "Inter", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-olive-50: #f5f7f2;
+  --color-olive-100: #e8ecd9;
+  --color-olive-200: #d1dac0;
+  --color-olive-300: #b0bf9a;
+  --color-olive-400: #8ba26f;
+  --color-olive-500: #6a864e;
+  --color-olive-600: #526c3a;
+  --color-olive-700: #40542e;
+  --color-olive-800: #354426;
+  --color-olive-900: #2e3a22;
+  --color-olive-950: #192012;
 }
 
 body {
