@@ -1058,7 +1058,7 @@ export default function App() {
               </div>
               <div className="space-y-3">
                 <p>
-                  <strong className="text-olive-900 font-bold">3. Mentor Authority Gates:</strong> Only administrators whose accounts match whitelists (such as <code>raksha05jk.rao@gmail.com</code>) can create or remove indices from the community shared Resource Hub.
+                  <strong className="text-olive-900 font-bold">3. Mentor Authority Gates:</strong> Only administrators whose accounts match whitelists (such as <code>theimperialscholarupsc05@gmail.com</code> or <code>raksha05jk.rao@gmail.com</code>) can create or remove indices from the community shared Resource Hub.
                 </p>
                 <p>
                   <strong className="text-olive-900 font-bold">4. Unified Sync Syncing:</strong> Real-time changes are synchronized atomically. Any pasted notes from your Imperial Notes desk are synchronized into folders immediately.

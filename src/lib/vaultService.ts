@@ -90,6 +90,17 @@ const SEED_HUB_RESOURCES: (Omit<ResourceHubItem, 'url'> & { encryptedUrl: string
   }
 ];
 
+// Whitelisted Admin emails that automatically receive administrative access
+const ADMIN_EMAILS = [
+  "raksha05jk.rao@gmail.com",
+  "theimperialscholarupsc05@gmail.com"
+];
+
+export const isWhitelistedAdmin = (email?: string | null): boolean => {
+  if (!email) return false;
+  return ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email.trim().toLowerCase());
+};
+
 /**
  * Handle Google Login (without password)
  */
@@ -102,7 +113,7 @@ export async function signInWithGoogle(): Promise<UserProfile> {
       const user = result.user;
       
       // Determine if Admin based on explicit user email list
-      const isAdminEmail = user.email === "raksha05jk.rao@gmail.com";
+      const isAdminEmail = isWhitelistedAdmin(user.email);
       const role = isAdminEmail ? 'admin' : 'user';
 
       const userProfile: UserProfile = {
@@ -123,7 +134,7 @@ export async function signInWithGoogle(): Promise<UserProfile> {
         photoURL: userProfile.photoURL,
         role: userProfile.role,
         createdAt: serverTimestamp()
-      });
+      }, { merge: true });
 
       // Maintain admin document if they are admin
       if (role === 'admin') {
@@ -141,8 +152,8 @@ export async function signInWithGoogle(): Promise<UserProfile> {
     // Automatically signs in with user's email matching metadata to showcase admin role!
     const sandboxUser: SandboxUser = {
       uid: "sandbox_candidate_2026",
-      email: "raksha05jk.rao@gmail.com", // Automatically set to user's registered ID to unlock admin hubs!
-      displayName: "Raksha Rao (Admin Aspirant)",
+      email: "theimperialscholarupsc05@gmail.com", // Automatically set to user's registered ID to unlock admin hubs!
+      displayName: "Imperial Scholar (Admin)",
       photoURL: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150",
       role: 'admin'
     };
@@ -178,9 +189,10 @@ export function subscribeToAuth(callback: (user: UserProfile | null) => void): (
           const docRef = doc(db, 'users', fbUser.uid);
           const docSnap = await getDoc(docRef);
           
-          let role: 'user' | 'admin' = fbUser.email === "raksha05jk.rao@gmail.com" ? 'admin' : 'user';
-          if (docSnap.exists()) {
-            role = docSnap.data().role || role;
+          let role: 'user' | 'admin' = isWhitelistedAdmin(fbUser.email) ? 'admin' : 'user';
+          if (docSnap.exists() && docSnap.data().role) {
+            // Priority: if email is in ADMIN_EMAILS whitelist, elevate to admin
+            role = isWhitelistedAdmin(fbUser.email) ? 'admin' : docSnap.data().role;
           }
           
           callback({
@@ -201,7 +213,7 @@ export function subscribeToAuth(callback: (user: UserProfile | null) => void): (
             email: fbUser.email || '',
             displayName: fbUser.displayName || 'Candidate',
             photoURL: fbUser.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
-            role: fbUser.email === "raksha05jk.rao@gmail.com" ? 'admin' : 'user',
+            role: isWhitelistedAdmin(fbUser.email) ? 'admin' : 'user',
             createdAt: new Date()
           });
         }
