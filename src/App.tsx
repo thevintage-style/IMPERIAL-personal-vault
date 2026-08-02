@@ -38,7 +38,8 @@ import {
   ExternalLink,
   ChevronRight,
   Trash2,
-  StickyNote
+  StickyNote,
+  X
 } from 'lucide-react';
 
 export default function App() {
@@ -61,7 +62,6 @@ export default function App() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
-  const [showStats, setShowStats] = useState(true);
 
   // Folder Creator Input State
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -174,20 +174,34 @@ export default function App() {
 
   // Move items between folders on the fly
   const handleMoveFolder = async (itemId: string, targetFolderId: string) => {
-    if (!currentUserZone()) return;
-    const item = personalResources.find(x => x.id === itemId);
-    if (!item) return;
-
+    if (!currentUser) return;
+    const updatedFolderId = targetFolderId === 'unassigned' ? '' : targetFolderId;
+    
     try {
-      const updatedFolderId = targetFolderId === 'unassigned' ? '' : targetFolderId;
-      await savePersonalResource(currentUserZone().uid, {
-        title: item.title,
-        description: item.description,
-        type: item.type,
-        url: item.url,
-        category: item.category,
-        folderId: updatedFolderId
-      }, item.id);
+      if (activeTab === 'personal') {
+        const item = personalResources.find(x => x.id === itemId);
+        if (!item) return;
+        await savePersonalResource(currentUser.uid, {
+          title: item.title,
+          description: item.description,
+          type: item.type,
+          url: item.url,
+          category: item.category,
+          folderId: updatedFolderId
+        }, item.id);
+      } else {
+        if (currentUser.role !== 'admin') return;
+        const item = hubResources.find(x => x.id === itemId);
+        if (!item) return;
+        await saveResourceHubItem(currentUser.uid, currentUser.displayName, {
+          title: item.title,
+          description: item.description,
+          type: item.type,
+          url: item.url,
+          category: item.category,
+          folderId: updatedFolderId
+        }, item.id);
+      }
     } catch (err) {
       console.error("Folder migration failed:", err);
     }
@@ -305,29 +319,54 @@ export default function App() {
     );
   };
 
+  // Multi-field intelligent search matcher
+  const matchesSearch = (res: PersonalResource | ResourceHubItem) => {
+    if (!searchQuery.trim()) return true;
+    const queryTerms = searchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    
+    const folder = folders.find(f => f.id === res.folderId);
+    const folderName = folder ? folder.name.toLowerCase() : '';
+    
+    let noteContent = '';
+    if (res.type === 'note' && res.url?.startsWith('NOTE:')) {
+      noteContent = res.url.substring(5).toLowerCase();
+    }
+
+    const title = (res.title || '').toLowerCase();
+    const description = (res.description || '').toLowerCase();
+    const url = (res.url || '').toLowerCase();
+    const category = (res.category || '').toLowerCase();
+    const type = (res.type || '').toLowerCase();
+
+    // Map GS category code to full paper label e.g. "GS2" -> "Governance, Constitution, Polity"
+    const catObj = UPSCCategories.find(c => c.value.toLowerCase() === category);
+    const catLabel = catObj ? catObj.label.toLowerCase() : '';
+
+    const searchableBlob = `${title} ${description} ${url} ${category} ${catLabel} ${type} ${folderName} ${noteContent}`;
+
+    return queryTerms.every(term => searchableBlob.includes(term));
+  };
+
   // Filtering Logic
   const filteredPersonal = useMemo(() => {
     return personalResources.filter(res => {
-      const matchesSearch = res.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            res.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            res.url.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = selectedCategory === 'all' || res.category === selectedCategory;
-      const matchesType = selectedType === 'all' || res.type === selectedType;
-      const matchesFolder = !selectedFolderId || res.folderId === selectedFolderId;
-      return matchesSearch && matchesCategory && matchesType && matchesFolder;
+      const matchS = matchesSearch(res);
+      const matchC = selectedCategory === 'all' || res.category === selectedCategory;
+      const matchT = selectedType === 'all' || res.type === selectedType;
+      const matchF = !selectedFolderId || res.folderId === selectedFolderId;
+      return matchS && matchC && matchT && matchF;
     });
-  }, [personalResources, searchQuery, selectedCategory, selectedType, selectedFolderId]);
+  }, [personalResources, searchQuery, selectedCategory, selectedType, selectedFolderId, folders]);
 
   const filteredHub = useMemo(() => {
     return hubResources.filter(res => {
-      const matchesSearch = res.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            res.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            res.url.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = selectedCategory === 'all' || res.category === selectedCategory;
-      const matchesType = selectedType === 'all' || res.type === selectedType;
-      return matchesSearch && matchesCategory && matchesType;
+      const matchS = matchesSearch(res);
+      const matchC = selectedCategory === 'all' || res.category === selectedCategory;
+      const matchT = selectedType === 'all' || res.type === selectedType;
+      const matchF = !selectedFolderId || res.folderId === selectedFolderId;
+      return matchS && matchC && matchT && matchF;
     });
-  }, [hubResources, searchQuery, selectedCategory, selectedType]);
+  }, [hubResources, searchQuery, selectedCategory, selectedType, selectedFolderId, folders]);
 
   const activeResourcesCount = activeTab === 'personal' ? filteredPersonal.length : filteredHub.length;
 
@@ -569,26 +608,17 @@ export default function App() {
             <Info className="w-4 h-4 text-olive-600 flex-shrink-0" />
             <p className="leading-snug">{guideTip}</p>
           </div>
-          <button 
-            onClick={() => setShowStats(!showStats)}
-            className="text-[10px] font-bold font-mono text-olive-800 hover:text-olive-950 hover:underline cursor-pointer uppercase flex-shrink-0"
-            lg-id="toggle-stats-btn"
-          >
-            {showStats ? "Hide Stats" : "Show Stats"}
-          </button>
         </div>
 
-        {/* Collapsible Statistics Bento Panel */}
-        {showStats && (
-          <VaultStats
-            personalCount={personalResources.length}
-            hubCount={hubResources.length}
-            personalResources={personalResources}
-            hubResources={hubResources}
-            isSandbox={isLocalSandbox}
-            currentUserRole={currentUser.role}
-          />
-        )}
+        {/* Statistics Bento Panel - Permanently visible for easy understanding */}
+        <VaultStats
+          personalCount={personalResources.length}
+          hubCount={hubResources.length}
+          personalResources={personalResources}
+          hubResources={hubResources}
+          isSandbox={isLocalSandbox}
+          currentUserRole={currentUser.role}
+        />
 
         {/* Connected UPSC Platforms Integration links */}
         {currentUser.role === 'admin' && (
@@ -687,15 +717,25 @@ export default function App() {
             
             {/* Search Input */}
             <div className="relative w-full">
-              <Search className="w-4 h-4 text-[#64748B] absolute left-3.5 top-3.5" />
+              <Search className="w-4 h-4 text-olive-600 absolute left-3.5 top-3.5" />
               <input
                 type="text"
-                placeholder={`Search ${activeTab === 'personal' ? 'personal' : 'expert shared'} resources...`}
+                placeholder={`Search titles, notes, topics, GS papers, URLs, or folders...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E5E7EB] focus:border-olive-600 focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-all shadow-sm font-sans"
+                className="w-full bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E5E7EB] focus:border-olive-600 focus:bg-white rounded-xl pl-10 pr-9 py-2.5 text-xs text-[#1A1A1A] placeholder-[#94A3B8] outline-none transition-all shadow-xs font-sans"
                 id="search_box_input"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700 p-0.5 rounded-full hover:bg-slate-200/50 transition-colors cursor-pointer"
+                  title="Clear search filter"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             {/* Write Button */}
@@ -785,124 +825,124 @@ export default function App() {
         {/* Dynamic Multi-Column Master/Explorer Layout with Folder shelf on Left split */}
         <div className="flex flex-col md:flex-row gap-6 items-start" id="explorer_master_layout">
           
-          {/* Left folder panel (Only relevant for personal custom workspace tab to keep clean focus) */}
-          {activeTab === 'personal' && (
-            <aside className="w-full md:w-64 flex-shrink-0 space-y-4" id="study_folders_cabinet">
-              <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-sm space-y-4 w-full">
+          {/* Left folder panel - Study Folders & Folder Maker available in both Personal Vault & Resource Hub */}
+          <aside className="w-full md:w-64 flex-shrink-0 space-y-4" id="study_folders_cabinet">
+            <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-sm space-y-4 w-full">
+              
+              {/* Cabinet Header */}
+              <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
+                <h3 className="text-xs font-display font-black text-olive-900 uppercase tracking-wider flex items-center gap-2 font-sans">
+                  <FolderOpen className="w-4 h-4 text-olive-600" />
+                  {activeTab === 'personal' ? 'Personal Folders' : 'Hub Folders'}
+                </h3>
+                <button
+                  onClick={() => setIsCreatingFolder(!isCreatingFolder)}
+                  className="p-1 hover:bg-olive-50 rounded-lg text-olive-600 hover:text-olive-850 transition-all cursor-pointer flex items-center gap-1"
+                  title="Create Study Folder"
+                  type="button"
+                  lg-id="add-folder-trigger"
+                >
+                  <FolderPlus className="w-4.5 h-4.5 text-olive-700" />
+                  <span className="text-[10px] font-bold font-sans text-olive-800 uppercase">New</span>
+                </button>
+              </div>
+
+              {/* Inline Folder Creation Form */}
+              {isCreatingFolder && (
+                <form onSubmit={handleCreateFolder} className="space-y-2 animate-fade-in p-2 bg-olive-50/50 rounded-xl border border-dashed border-olive-200">
+                  <input
+                    type="text"
+                    placeholder="Folder name (e.g. GS2 Polity)"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    className="w-full bg-white border border-[#E5E7EB] rounded-xl px-3 py-1.5 text-xs text-[#1A1A1A] outline-none focus:border-olive-600 font-sans"
+                    autoFocus
+                    required
+                  />
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingFolder(false)}
+                      className="px-2 py-1 text-[9.5px] font-bold text-slate-600 bg-white border border-slate-200 rounded-md cursor-pointer hover:bg-slate-50 font-sans"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-2.5 py-1 text-[9.5px] font-bold text-white bg-olive-700 hover:bg-olive-850 rounded-md cursor-pointer font-sans"
+                    >
+                      Create
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Folder lists mapping */}
+              <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
                 
-                {/* Cabinet Header */}
-                <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
-                  <h3 className="text-xs font-display font-black text-olive-900 uppercase tracking-wider flex items-center gap-2 font-sans">
-                    <FolderOpen className="w-4 h-4 text-olive-600" />
-                    Study Folders
-                  </h3>
-                  <button
-                    onClick={() => setIsCreatingFolder(!isCreatingFolder)}
-                    className="p-1 hover:bg-olive-50 rounded-lg text-olive-600 hover:text-olive-850 transition-all cursor-pointer"
-                    title="Create Study Folder"
-                    type="button"
-                    lg-id="add-folder-trigger"
-                  >
-                    <FolderPlus className="w-4.5 h-4.5 text-olive-700" />
-                  </button>
-                </div>
+                {/* Select ALL folders */}
+                <button
+                  onClick={() => setSelectedFolderId('')}
+                  className={`w-full text-left px-3 py-2 rounded-xl text-xs font-sans transition-all flex items-center justify-between cursor-pointer ${
+                    selectedFolderId === ''
+                      ? 'bg-olive-750 text-white font-bold'
+                      : 'text-slate-600 hover:bg-olive-50/50 hover:text-olive-900'
+                  }`}
+                  type="button"
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    📁 All Loose & Foldered files
+                  </span>
+                  <span className={`text-[10px] font-mono px-1.5 rounded ${
+                    selectedFolderId === '' ? 'bg-white/20 text-white' : 'bg-olive-100 text-olive-850'
+                  }`}>
+                    {activeTab === 'personal' ? personalResources.length : hubResources.length}
+                  </span>
+                </button>
 
-                {/* Inline Folder Creation Form */}
-                {isCreatingFolder && (
-                  <form onSubmit={handleCreateFolder} className="space-y-2 animate-fade-in p-2 bg-olive-50/50 rounded-xl border border-dashed border-olive-200">
-                    <input
-                      type="text"
-                      placeholder="Folder name (e.g. GS2 Polity)"
-                      value={newFolderName}
-                      onChange={(e) => setNewFolderName(e.target.value)}
-                      className="w-full bg-white border border-[#E5E7EB] rounded-xl px-3 py-1.5 text-xs text-[#1A1A1A] outline-none focus:border-olive-600 font-sans"
-                      autoFocus
-                      required
-                    />
-                    <div className="flex justify-end gap-1.5">
+                {/* Individual custom Folders */}
+                {folders.map(folder => {
+                  const currentList = activeTab === 'personal' ? personalResources : hubResources;
+                  const count = currentList.filter(r => r.folderId === folder.id).length;
+                  const isSelected = selectedFolderId === folder.id;
+                  return (
+                    <div key={folder.id} className="group flex items-center justify-between rounded-xl hover:bg-olive-50/30 pr-2">
                       <button
+                        onClick={() => setSelectedFolderId(folder.id)}
+                        className={`flex-1 text-left px-3 py-1.5 text-xs font-sans transition-all flex items-center gap-2 truncate cursor-pointer ${
+                          isSelected
+                            ? 'text-olive-850 font-bold bg-olive-50/80 border border-olive-100 rounded-lg'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
                         type="button"
-                        onClick={() => setIsCreatingFolder(false)}
-                        className="px-2 py-1 text-[9.5px] font-bold text-slate-600 bg-white border border-slate-200 rounded-md cursor-pointer hover:bg-slate-50 font-sans"
                       >
-                        Cancel
+                        <span className="truncate">📂 {folder.name}</span>
                       </button>
-                      <button
-                        type="submit"
-                        className="px-2.5 py-1 text-[9.5px] font-bold text-white bg-olive-700 hover:bg-olive-850 rounded-md cursor-pointer font-sans"
-                      >
-                        Create
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* Folder lists mapping */}
-                <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
-                  
-                  {/* Select ALL folders */}
-                  <button
-                    onClick={() => setSelectedFolderId('')}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-sans transition-all flex items-center justify-between cursor-pointer ${
-                      selectedFolderId === ''
-                        ? 'bg-olive-750 text-white font-bold'
-                        : 'text-slate-600 hover:bg-olive-50/50 hover:text-olive-900'
-                    }`}
-                    type="button"
-                  >
-                    <span className="flex items-center gap-2 truncate">
-                      📁 All Loose & Foldered files
-                    </span>
-                    <span className={`text-[10px] font-mono px-1.5 rounded ${
-                      selectedFolderId === '' ? 'bg-white/20 text-white' : 'bg-olive-100 text-olive-850'
-                    }`}>
-                      {personalResources.length}
-                    </span>
-                  </button>
-
-                  {/* Individual custom Folders */}
-                  {folders.map(folder => {
-                    const count = personalResources.filter(r => r.folderId === folder.id).length;
-                    const isSelected = selectedFolderId === folder.id;
-                    return (
-                      <div key={folder.id} className="group flex items-center justify-between rounded-xl hover:bg-olive-50/30 pr-2">
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <span className="text-[9.5px] bg-olive-50 text-olive-750 px-1.5 rounded font-mono group-hover:bg-olive-100/50">
+                          {count}
+                        </span>
                         <button
-                          onClick={() => setSelectedFolderId(folder.id)}
-                          className={`flex-1 text-left px-3 py-1.5 text-xs font-sans transition-all flex items-center gap-2 truncate cursor-pointer ${
-                            isSelected
-                              ? 'text-olive-850 font-bold bg-olive-50/80 border border-olive-100 rounded-lg'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
+                          onClick={() => handleDeleteFolder(folder.id)}
+                          className="p-1 text-[#94A3B8] hover:text-red-600 rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer flex items-center justify-center"
+                          title="Delete folder and release notes inside"
                           type="button"
                         >
-                          <span className="truncate">📂 {folder.name}</span>
+                          <Trash2 className="w-3 h-3" />
                         </button>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <span className="text-[9.5px] bg-olive-50 text-olive-750 px-1.5 rounded font-mono group-hover:bg-olive-100/50">
-                            {count}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteFolder(folder.id)}
-                            className="p-1 text-[#94A3B8] hover:text-red-600 rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer flex items-center justify-center"
-                            title="Delete folder and release notes inside"
-                            type="button"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
                       </div>
-                    );
-                  })}
-
-                  {folders.length === 0 && !isCreatingFolder && (
-                    <div className="text-center py-4 text-[11px] text-[#94A3B8] font-sans">
-                      No custom folders created yet. Click the folder icon above to make folder categories.
                     </div>
-                  )}
-                </div>
+                  );
+                })}
+
+                {folders.length === 0 && !isCreatingFolder && (
+                  <div className="text-center py-4 text-[11px] text-[#94A3B8] font-sans">
+                    No custom folders created yet. Click "+ New" above to create folders.
+                  </div>
+                )}
               </div>
-            </aside>
-          )}
+            </div>
+          </aside>
 
           {/* Right/Central: GRID OF DATA CARDS */}
           <div className="flex-1 w-full" id="cards_grid_wrapper">
@@ -1007,6 +1047,7 @@ export default function App() {
                       isAdmin={currentUser.role === 'admin'}
                       folders={folders}
                       onEdit={handleEditClick}
+                      onMoveFolder={handleMoveFolder}
                       isSelected={selectedIds.includes(res.id)}
                       onToggleSelect={handleToggleSelect}
                     />

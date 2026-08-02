@@ -1,5 +1,5 @@
 import { PersonalResource, ResourceHubItem, UPSCCategories } from '../types';
-import { ShieldCheck, BookOpen, Database } from 'lucide-react';
+import { BookOpen, Database, Layers } from 'lucide-react';
 
 interface VaultStatsProps {
   personalCount: number;
@@ -14,9 +14,7 @@ export default function VaultStats({
   personalCount,
   hubCount,
   personalResources,
-  hubResources,
-  isSandbox,
-  currentUserRole
+  hubResources
 }: VaultStatsProps) {
   
   // Calculate category breakdowns for progress indicators
@@ -32,99 +30,79 @@ export default function VaultStats({
   });
 
   return (
-    <div className={`grid grid-cols-1 ${currentUserRole === 'admin' ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6 mb-8 mt-2`} id="vault_stats_section">
-      {/* 2. Primary Metrics Block */}
-      <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col justify-between" id="metric_card_totals">
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-[#94A3B8] tracking-widest uppercase">Active Storage</span>
-            <div className="p-2 bg-olive-50 rounded-xl text-olive-800 border border-olive-200">
-              <Database className="w-5 h-5 text-olive-650" />
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6 mt-2" id="vault_stats_section">
+      {/* 1. Primary Metrics Block */}
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-xs flex flex-col justify-between" id="metric_card_totals">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-olive-50 rounded-lg text-olive-800 border border-olive-200">
+              <Database className="w-4 h-4 text-olive-700" />
             </div>
+            <span className="text-xs font-bold text-olive-900 uppercase tracking-wider font-sans">Active Storage Overview</span>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-[#64748B] font-medium font-sans">Personal Vault</p>
-              <div className="flex items-baseline gap-1.5 mt-1">
-                <span className="text-3xl font-display font-extrabold text-olive-900">{personalCount}</span>
-                <span className="text-xs text-[#64748B] font-mono">items</span>
-              </div>
-            </div>
-            <div className="border-l border-[#E5E7EB] pl-4">
-              <p className="text-xs text-[#64748B] font-medium font-sans">Curated Hub</p>
-              <div className="flex items-baseline gap-1.5 mt-1">
-                <span className="text-3xl font-display font-extrabold text-olive-900">{hubCount}</span>
-                <span className="text-xs text-[#64748B] font-mono">expert</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="mt-5 pt-4 border-t border-[#E5E7EB] flex items-center justify-between text-[11px] text-[#64748B] font-mono">
-          <span>Active Session Sync</span>
-          <span className="flex items-center gap-1.5 text-olive-700 font-medium">
+          <span className="flex items-center gap-1 text-[10px] text-olive-700 font-mono font-bold bg-olive-50/70 border border-olive-200 px-2 py-0.5 rounded-full">
             <span className="w-1.5 h-1.5 rounded-full bg-olive-500 animate-pulse"></span>
-            Cloud Safe
+            Cloud Synced
           </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 bg-[#F8FAFC] p-3 rounded-xl border border-[#E5E7EB]">
+          <div>
+            <p className="text-[10px] text-[#64748B] font-bold uppercase tracking-wide font-sans">Personal Vault</p>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-2xl font-display font-black text-olive-900">{personalCount}</span>
+              <span className="text-[10px] text-[#64748B] font-mono">indexed files</span>
+            </div>
+          </div>
+          <div className="border-l border-[#E5E7EB] pl-3">
+            <p className="text-[10px] text-[#64748B] font-bold uppercase tracking-wide font-sans">Curated Hub</p>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-2xl font-display font-black text-olive-900">{hubCount}</span>
+              <span className="text-[10px] text-[#64748B] font-mono">shared guides</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Syllabus Coverage Bento Grid */}
-      <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm md:col-span-1" id="metric_syllabus_coverage">
-        <h3 className="text-xs font-bold text-[#94A3B8] tracking-widest uppercase mb-4 flex items-center gap-1.5">
-          <BookOpen className="w-3.5 h-3.5 text-olive-600" />
-          Syllabus Indexing Map
-        </h3>
-        <div className="space-y-2.5 max-h-[148px] overflow-y-auto pr-1">
+      {/* 2. Syllabus Indexing Map - Compact 3-Column Paper Pills */}
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 shadow-xs" id="metric_syllabus_coverage">
+        <div className="flex items-center justify-between mb-2.5">
+          <h3 className="text-xs font-bold text-olive-900 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+            <BookOpen className="w-4 h-4 text-olive-600" />
+            Syllabus Indexing Map
+          </h3>
+          <span className="text-[10px] text-[#64748B] font-mono flex items-center gap-1">
+            <Layers className="w-3 h-3 text-olive-600" />
+            {categoryStats.filter(c => c.total > 0).length} / {categoryStats.length} Papers Active
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
           {categoryStats.map(stat => {
             const hasData = stat.total > 0;
             return (
-              <div key={stat.value} className="flex flex-col gap-1">
-                <div className="flex justify-between text-[11px] font-sans">
-                  <span className={hasData ? "text-olive-900 font-semibold" : "text-[#94A3B8]"}>
-                    {stat.value} - {stat.label.split(':')[0]}
-                  </span>
-                  <span className={hasData ? "font-mono font-bold text-olive-800" : "font-mono text-[#94A3B8]"}>
-                    {stat.total}
-                  </span>
+              <div 
+                key={stat.value} 
+                className={`p-2 rounded-xl border transition-all flex items-center justify-between ${
+                  hasData 
+                    ? 'bg-olive-50/60 border-olive-200/80 text-olive-950 font-semibold' 
+                    : 'bg-[#F8FAFC] border-[#E5E7EB] text-slate-400'
+                }`}
+              >
+                <div className="truncate pr-1">
+                  <span className="text-[10px] font-mono block font-bold truncate">{stat.value}</span>
+                  <span className="text-[9px] text-[#64748B] block truncate font-sans">{stat.label.split(':')[0]}</span>
                 </div>
-                <div className="h-1.5 w-full bg-olive-50 rounded-full overflow-hidden">
-                  <div 
-                     className="h-full rounded-full transition-all duration-500 bg-olive-600" 
-                     style={{ width: `${Math.min(stat.total * 20, 100)}%` }} // 5 items fills a category full bar
-                  />
-                </div>
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold flex-shrink-0 ${
+                  hasData ? 'bg-olive-750 text-white' : 'bg-slate-100 text-slate-400'
+                }`}>
+                  {stat.total}
+                </span>
               </div>
             );
           })}
         </div>
       </div>
-
-      {/* 🔒 Encryption Shield Bento Grid */}
-      {currentUserRole === 'admin' && (
-        <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 shadow-sm relative overflow-hidden flex flex-col justify-between" id="metric_security_integrity">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-[#94A3B8] tracking-widest uppercase">Vault Security</span>
-              <div className="p-1.5 bg-olive-50 rounded-xl text-olive-800 border border-olive-200">
-                <ShieldCheck className="w-5 h-5 text-olive-700" />
-              </div>
-            </div>
-            <p className="text-xs text-[#64748B] leading-relaxed font-sans mb-3">
-              All stored material listings are encrypted client-side using robust <strong className="text-olive-900">AES-256 GCM</strong> before writing to Firestore.
-            </p>
-            <div className="grid grid-cols-2 gap-1.5 bg-olive-50/50 border border-olive-150 rounded-xl p-3 text-[11px] font-mono">
-              <div className="text-[#64748B]">Engine:</div>
-              <div className="text-olive-700 font-bold text-right">WebCrypto API</div>
-              <div className="text-[#64748B]">Database:</div>
-              <div className="text-olive-850 text-right font-medium">
-                {isSandbox ? "Sandbox Local" : "Firestore Cloud"}
-              </div>
-              <div className="text-[#64748B]">Privilege:</div>
-              <div className="text-right text-olive-850 font-bold uppercase">{currentUserRole}</div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

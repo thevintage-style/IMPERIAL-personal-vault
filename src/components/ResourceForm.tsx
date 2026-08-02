@@ -96,15 +96,18 @@ export default function ResourceForm({
       return;
     }
 
-    // Size limit
-    const maxSize = 525 * 1024 * 1024; // 525MB (increased 15x from 35MB)
+    // Size limit - 100x expanded capacity (52.5GB limit)
+    const maxSize = 52500 * 1024 * 1024; // 52,500MB (52.5GB)
     if (file.size > maxSize) {
-      setError(`Your file (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 525MB. UPSC SafeVault files are restricted to max 525MB. For larger files, prefer Google Drive pointers using 'Web Address Link' mode.`);
+      setError(`Your file (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 52.5GB limit. For larger files, prefer Google Drive pointers.`);
       return;
     }
 
     setError(null);
     const reader = new FileReader();
+    reader.onerror = () => {
+      setError("Failed to read file from disk. Please re-try.");
+    };
     reader.onload = (e) => {
       if (e.target?.result) {
         setUrl(e.target.result as string);
