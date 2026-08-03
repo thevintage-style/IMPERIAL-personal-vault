@@ -19,7 +19,7 @@ import {
   User as FirebaseUser
 } from 'firebase/auth';
 import { db, auth, isLocalSandbox, OperationType, handleFirestoreError } from './firebase';
-import { PersonalResource, ResourceHubItem, UserProfile } from '../types';
+import { PersonalResource, ResourceHubItem, UserProfile, ResourceType } from '../types';
 import { encryptText, decryptText } from './encryption';
 import { saveLargeFile, getLargeFile, deleteLargeFile } from './largeFileStorage';
 
@@ -725,4 +725,171 @@ export function subscribeFolders(userId: string, onUpdate: (folders: Folder[]) =
       folderChangeSubscribers.delete(handleUpdate);
     };
   }
+}
+
+// ---------------- Saved Stuff Collection Service ----------------
+const savedStuffSubscribers = new Set<() => void>();
+const SIMULATED_SAVED_STUFF_KEY = "upsc_simulated_saved_stuff_";
+
+export interface SavedStuffItem {
+  id: string;
+  originalId: string;
+  title: string;
+  description: string;
+  type: ResourceType;
+  url: string;
+  category: string;
+  folderId?: string;
+  savedAt: Date;
+  origin: 'personal' | 'hub';
+}
+
+/**
+ * Save an item to the user's separate "Saved Stuff" collection
+ */
+export async function saveToSavedStuff(
+  userId: string, 
+  item: PersonalResource | ResourceHubItem,
+  origin: 'personal' | 'hub' = 'personal'
+): Promise<void> {
+  const savedId = "saved_" + item.id;
+  
+  let finalUrl = item.url;
+  if (item.url && item.url.startsWith('data:')) {
+    const fileKey = `large_file_${savedId}`;
+    await saveLargeFile(fileKey, item.url);
+    finalUrl = `largefile:${fileKey}`;
+  }
+
+  const encryptedUrl = await encryptText(finalUrl, userId);
+
+  if (!isLocalSandbox) {
+    const docPath = `users/${userId}/saved_stuff/${savedId}`;
+    try {
+      const docRef = doc(db, docPath);
+      await setDoc(docRef, {
+        id: savedId,
+        originalId: item.id,
+        title: item.title,
+        description: item.description,
+        type: item.type,
+        url: encryptedUrl,
+        category: item.category,
+        folderId: item.folderId || "",
+        origin,
+        savedAt: serverTimestamp()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, docPath);
+    }
+  } else {
+    const stored = localStorage.getItem(SIMULATED_SAVED_STUFF_KEY + userId);
+    let list: any[] = stored ? JSON.parse(stored) : [];
+    
+    const idx = list.findIndex(x => x.originalId === item.id || x.id === savedId);
+    const record = {
+      id: savedId,
+      originalId: item.id,
+      title: item.title,
+      description: item.description,
+      type: item.type,
+      url: encryptedUrl,
+      category: item.category,
+      folderId: item.folderId || "",
+      origin,
+      savedAt: new Date().toISOString()
+    };
+
+    if (idx >= 0) {
+      list[idx] = record;
+    } else {
+      list.unshift(record);
+    }
+
+    localStorage.setItem(SIMULATED_SAVED_STUFF_KEY + userId, JSON.stringify(list));
+    savedStuffSubscribers.forEach(sub => sub());
+  }
+}
+
+/**
+ * Remove an item from the user's Saved Stuff collection
+ */
+export async function removeFromSavedStuff(userId: string, savedItemId: string): Promise<void> {
+  await deleteLargeFile(`large_file_${savedItemId}`);
+  if (!isLocalSandbox) {
+    const docPath = `users/${userId}/saved_stuff/${savedItemId}`;
+    try {
+      await deleteDoc(doc(db, docPath));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, docPath);
+    }
+  } else {
+    const stored = localStorage.getItem(SIMULATED_SAVED_STUFF_KEY + userId);
+    if (stored) {
+      let list: any[] = JSON.parse(stored);
+      list = list.filter(x => x.id !== savedItemId && x.originalId !== savedItemId);
+      localStorage.setItem(SIMULATED_SAVED_STUFF_KEY + userId, JSON.stringify(list));
+      savedStuffSubscribers.forEach(sub => sub());
+    }
+  }
+}
+
+/**
+ * Subscribe to the user's separate Saved Stuff collection
+ */
+export function subscribeSavedStuff(userId: string, onUpdate: (items: SavedStuffItem[]) => void): () => void {
+  if (!isLocalSandbox) {
+    const colPath = `users/${userId}/saved_stuff`;
+    const colRef = collection(db, colPath);
+    const q = query(colRef, orderBy('savedAt', 'desc'));
+
+    return onSnapshot(q, async (snap) => {
+      const rawList = snap.docs.map(d => d.data());
+      const decrypted = await decryptSavedStuff(rawList, userId);
+      onUpdate(decrypted);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, colPath);
+    });
+  } else {
+    const handleUpdate = async () => {
+      const stored = localStorage.getItem(SIMULATED_SAVED_STUFF_KEY + userId);
+      const rawList = stored ? JSON.parse(stored) : [];
+      const decrypted = await decryptSavedStuff(rawList, userId);
+      onUpdate(decrypted);
+    };
+
+    savedStuffSubscribers.add(handleUpdate);
+    handleUpdate();
+    return () => {
+      savedStuffSubscribers.delete(handleUpdate);
+    };
+  }
+}
+
+async function decryptSavedStuff(rawItems: any[], userUid: string): Promise<SavedStuffItem[]> {
+  return Promise.all(rawItems.map(async (raw) => {
+    let plainUrl = raw.url;
+    if (plainUrl && plainUrl.startsWith("ENC:")) {
+      plainUrl = await decryptText(plainUrl, userUid);
+    }
+    if (plainUrl && plainUrl.startsWith("largefile:")) {
+      const fileKey = plainUrl.replace("largefile:", "");
+      const localDataUrl = await getLargeFile(fileKey);
+      if (localDataUrl) {
+        plainUrl = localDataUrl;
+      }
+    }
+    return {
+      id: raw.id,
+      originalId: raw.originalId || raw.id,
+      title: raw.title || '',
+      description: raw.description || '',
+      type: raw.type || 'link',
+      url: plainUrl,
+      category: raw.category || 'General',
+      folderId: raw.folderId || '',
+      origin: raw.origin || 'personal',
+      savedAt: raw.savedAt instanceof Timestamp ? raw.savedAt.toDate() : new Date(raw.savedAt || Date.now())
+    } as SavedStuffItem;
+  }));
 }

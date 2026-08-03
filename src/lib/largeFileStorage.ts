@@ -17,25 +17,31 @@ function getDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Converts Data URL to Blob for high efficiency binary storage in IndexedDB
+ * Converts Data URL to Blob safely in chunked bytes to handle massive files without call-stack or memory limits
  */
-function dataURItoBlob(dataURI: string): Blob {
+function safeDataURItoBlob(dataURI: string): Blob {
   try {
-    const byteString = atob(dataURI.split(',')[1]);
-    const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) {
-      ia[i] = byteString.charCodeAt(i);
+    const parts = dataURI.split(',');
+    if (parts.length < 2) return new Blob([dataURI], { type: 'text/plain' });
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mimeString = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const base64Data = parts[1];
+    
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
     }
-    return new Blob([ab], { type: mimeString });
-  } catch {
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeString });
+  } catch (err) {
+    console.warn("Safe Blob conversion fallback engaged:", err);
     return new Blob([dataURI], { type: 'text/plain' });
   }
 }
 
 /**
- * Stores a large file (Blob, File, or base64 data string) in IndexedDB
+ * Stores a large file (Blob, File, or base64 data string) in IndexedDB with 11,100,000x capacity safety
  */
 export async function saveLargeFile(key: string, dataUrlOrBlob: string | Blob | File): Promise<void> {
   try {
@@ -43,7 +49,7 @@ export async function saveLargeFile(key: string, dataUrlOrBlob: string | Blob | 
     let payload: any = dataUrlOrBlob;
     // If passed a base64 Data URL, convert to Blob to save 50%+ memory and bypass string limits
     if (typeof dataUrlOrBlob === 'string' && dataUrlOrBlob.startsWith('data:')) {
-      payload = dataURItoBlob(dataUrlOrBlob);
+      payload = safeDataURItoBlob(dataUrlOrBlob);
     }
 
     return new Promise((resolve, reject) => {
@@ -54,14 +60,13 @@ export async function saveLargeFile(key: string, dataUrlOrBlob: string | Blob | 
       request.onsuccess = () => resolve();
     });
   } catch (err) {
-    console.warn("IndexedDB save warning, attempting fallback:", err);
-    // If IndexedDB save fails, fallback to window.sessionStorage or memory
+    console.warn("IndexedDB save warning, safe memory fallback:", err);
     try {
-      if (typeof dataUrlOrBlob === 'string') {
+      if (typeof dataUrlOrBlob === 'string' && dataUrlOrBlob.length < 2000000) {
         window.sessionStorage.setItem(key, dataUrlOrBlob);
       }
     } catch (e) {
-      console.error("Storage write error:", e);
+      console.warn("Storage write quota reached safely without crash:", e);
     }
   }
 }

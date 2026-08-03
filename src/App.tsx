@@ -12,7 +12,11 @@ import {
   signOutUser,
   subscribeFolders,
   saveFolder,
-  deleteFolder
+  deleteFolder,
+  subscribeSavedStuff,
+  saveToSavedStuff,
+  removeFromSavedStuff,
+  SavedStuffItem
 } from './lib/vaultService';
 import { isLocalSandbox } from './lib/firebase';
 import { PersonalResource, ResourceHubItem, UPSCCategories, ResourceType, UserProfile, Folder } from './types';
@@ -39,18 +43,21 @@ import {
   ChevronRight,
   Trash2,
   StickyNote,
-  X
+  X,
+  BookmarkPlus,
+  Bookmark
 } from 'lucide-react';
 
 export default function App() {
   // Authentication & Session States
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'personal' | 'hub'>('personal');
+  const [activeTab, setActiveTab] = useState<'personal' | 'hub' | 'saved'>('personal');
 
   // Resource Database States
   const [personalResources, setPersonalResources] = useState<PersonalResource[]>([]);
   const [hubResources, setHubResources] = useState<ResourceHubItem[]>([]);
+  const [savedStuffItems, setSavedStuffItems] = useState<SavedStuffItem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   
   // Dashboard Interactive States
@@ -114,6 +121,37 @@ export default function App() {
     });
     return () => unsubscribe();
   }, [currentUser]);
+
+  // Subscribe to Saved Stuff collection
+  useEffect(() => {
+    if (!currentUser) {
+      setSavedStuffItems([]);
+      return;
+    }
+    const unsubscribe = subscribeSavedStuff(currentUser.uid, (data) => {
+      setSavedStuffItems(data);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // Save item to separate Saved Stuff collection
+  const handleSaveToStuff = async (item: PersonalResource | ResourceHubItem) => {
+    if (!currentUser) return;
+    try {
+      const origin = activeTab === 'hub' ? 'hub' : 'personal';
+      await saveToSavedStuff(currentUser.uid, item, origin);
+    } catch (err) {
+      console.error("Save to stuff failed:", err);
+    }
+  };
+
+  // Remove item from Saved Stuff collection
+  const handleRemoveFromSavedStuff = async (id: string) => {
+    if (!currentUser) return;
+    if (confirm("Remove this item from your Saved Stuff collection?")) {
+      await removeFromSavedStuff(currentUser.uid, id);
+    }
+  };
 
   // Clear selection on filter and tab updates
   useEffect(() => {
@@ -368,7 +406,20 @@ export default function App() {
     });
   }, [hubResources, searchQuery, selectedCategory, selectedType, selectedFolderId, folders]);
 
-  const activeResourcesCount = activeTab === 'personal' ? filteredPersonal.length : filteredHub.length;
+  const filteredSaved = useMemo(() => {
+    return savedStuffItems.filter(res => {
+      const matchS = matchesSearch(res as any);
+      const matchC = selectedCategory === 'all' || res.category === selectedCategory;
+      const matchT = selectedType === 'all' || res.type === selectedType;
+      const matchF = !selectedFolderId || res.folderId === selectedFolderId;
+      return matchS && matchC && matchT && matchF;
+    });
+  }, [savedStuffItems, searchQuery, selectedCategory, selectedType, selectedFolderId, folders]);
+
+  const activeResourcesCount = 
+    activeTab === 'personal' ? filteredPersonal.length :
+    activeTab === 'hub' ? filteredHub.length :
+    filteredSaved.length;
 
   // Onboarding guides label
   const guideTip = useMemo(() => {
@@ -379,13 +430,18 @@ export default function App() {
       return currentUser && currentUser.role === 'admin'
         ? `📊 Displaying ${filteredPersonal.length} of ${personalResources.length} personalized assets. All URLs and Photos are AES-256 decrypted in-memory inside your local web-isolated workspace.`
         : `📊 Displaying ${filteredPersonal.length} of ${personalResources.length} personalized study materials.`;
-    } else {
+    } else if (activeTab === 'hub') {
       if (hubResources.length === 0) {
         return "🕒 The Shared Curation Hub is waiting for expert content uploads. Only admins can initialize these study boards.";
       }
-      return "🤝 Hint: Browse verified curations by mentors. Hover over a study block and click 'Save' to import and encrypt it into your private vault.";
+      return "🤝 Hint: Browse verified curations by mentors. Hover over a study block and click 'Save' to save it to your separate Saved Stuff collection.";
+    } else {
+      if (savedStuffItems.length === 0) {
+        return "📌 Tip: Click 'Save' on any item in your Vault or Hub to bookmark and organize it in your separate Saved Stuff space.";
+      }
+      return `🔖 Displaying ${filteredSaved.length} of ${savedStuffItems.length} saved stuff items. Move them to custom folders anytime!`;
     }
-  }, [activeTab, personalResources, hubResources, filteredPersonal, filteredHub, currentUser]);
+  }, [activeTab, personalResources, hubResources, savedStuffItems, filteredPersonal, filteredHub, filteredSaved, currentUser]);
 
   if (isAuthLoading) {
     return (
@@ -678,14 +734,14 @@ export default function App() {
         {/* Workspace Dual Cabinet Controller Tabs and Search bar */}
         <div className="bg-white border border-[#E5E7EB] rounded-2xl p-5 shadow-sm flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between" id="filter_command_center">
           
-          {/* Dual Tabs toggler */}
-          <div className="flex items-center p-1.5 bg-[#F1F5F9] border border-[#E5E7EB] rounded-xl max-w-md w-full" id="dual_vault_selectors">
+          {/* Cabinet Tabs toggler */}
+          <div className="flex items-center p-1.5 bg-[#F1F5F9] border border-[#E5E7EB] rounded-xl max-w-xl w-full" id="dual_vault_selectors">
             <button
               onClick={() => {
                 setActiveTab('personal');
-                setSelectedFolderId(''); // Reset selected folder when switching tabs
+                setSelectedFolderId('');
               }}
-              className={`flex-1 py-2 px-4 rounded-lg text-xs font-semibold font-sans tracking-wide transition-all outline-none flex items-center justify-center gap-2 cursor-pointer ${
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold font-sans tracking-wide transition-all outline-none flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeTab === 'personal'
                   ? 'bg-white text-olive-850 font-bold shadow-sm border border-olive-200'
                   : 'text-[#64748B] hover:text-olive-800'
@@ -693,14 +749,14 @@ export default function App() {
               lg-id="tab-personal-btn"
             >
               <Lock className="w-3.5 h-3.5 text-olive-700" />
-              Personal Private Vault ({personalResources.length})
+              <span>Personal Vault ({personalResources.length})</span>
             </button>
             <button
               onClick={() => {
                 setActiveTab('hub');
                 setSelectedFolderId('');
               }}
-              className={`flex-1 py-2 px-4 rounded-lg text-xs font-semibold font-sans tracking-wide transition-all outline-none flex items-center justify-center gap-2 cursor-pointer ${
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold font-sans tracking-wide transition-all outline-none flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeTab === 'hub'
                   ? 'bg-white text-olive-850 font-bold shadow-sm border border-olive-200'
                   : 'text-[#64748B] hover:text-olive-800'
@@ -708,7 +764,22 @@ export default function App() {
               lg-id="tab-hub-btn"
             >
               <Users className="w-3.5 h-3.5 text-slate-600" />
-              Expert Resource Hub ({hubResources.length})
+              <span>Resource Hub ({hubResources.length})</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('saved');
+                setSelectedFolderId('');
+              }}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold font-sans tracking-wide transition-all outline-none flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeTab === 'saved'
+                  ? 'bg-white text-olive-850 font-bold shadow-sm border border-olive-200'
+                  : 'text-[#64748B] hover:text-olive-800'
+              }`}
+              lg-id="tab-saved-btn"
+            >
+              <Bookmark className="w-3.5 h-3.5 text-amber-600" />
+              <span>Saved Stuff ({savedStuffItems.length})</span>
             </button>
           </div>
 
@@ -896,13 +967,13 @@ export default function App() {
                   <span className={`text-[10px] font-mono px-1.5 rounded ${
                     selectedFolderId === '' ? 'bg-white/20 text-white' : 'bg-olive-100 text-olive-850'
                   }`}>
-                    {activeTab === 'personal' ? personalResources.length : hubResources.length}
+                    {activeTab === 'personal' ? personalResources.length : activeTab === 'hub' ? hubResources.length : savedStuffItems.length}
                   </span>
                 </button>
 
                 {/* Individual custom Folders */}
                 {folders.map(folder => {
-                  const currentList = activeTab === 'personal' ? personalResources : hubResources;
+                  const currentList = activeTab === 'personal' ? personalResources : activeTab === 'hub' ? hubResources : savedStuffItems;
                   const count = currentList.filter(r => r.folderId === folder.id).length;
                   const isSelected = selectedFolderId === folder.id;
                   return (
@@ -947,7 +1018,9 @@ export default function App() {
           {/* Right/Central: GRID OF DATA CARDS */}
           <div className="flex-1 w-full" id="cards_grid_wrapper">
             {/* Multi-select Header Control Bar */}
-            {((activeTab === 'personal' && filteredPersonal.length > 0) || (activeTab === 'hub' && filteredHub.length > 0)) && (
+            {((activeTab === 'personal' && filteredPersonal.length > 0) || 
+              (activeTab === 'hub' && filteredHub.length > 0) ||
+              (activeTab === 'saved' && filteredSaved.length > 0)) && (
               <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 mb-6 flex flex-wrap items-center justify-between gap-3 shadow-sm" id="multi_select_header_bar">
                 <div className="flex items-center gap-3">
                   <input 
@@ -955,13 +1028,17 @@ export default function App() {
                     checked={
                       activeTab === 'personal' 
                         ? filteredPersonal.length > 0 && selectedIds.length === filteredPersonal.length 
-                        : filteredHub.length > 0 && selectedIds.length === filteredHub.length
+                        : activeTab === 'hub'
+                          ? filteredHub.length > 0 && selectedIds.length === filteredHub.length
+                          : filteredSaved.length > 0 && selectedIds.length === filteredSaved.length
                     }
                     onChange={(e) => {
                       if (e.target.checked) {
                         const visibleIds = activeTab === 'personal' 
                           ? filteredPersonal.map(x => x.id) 
-                          : filteredHub.map(x => x.id);
+                          : activeTab === 'hub'
+                            ? filteredHub.map(x => x.id)
+                            : filteredSaved.map(x => x.id);
                         setSelectedIds(visibleIds);
                       } else {
                         setSelectedIds([]);
@@ -971,7 +1048,7 @@ export default function App() {
                     className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500 cursor-pointer accent-slate-950"
                   />
                   <label htmlFor="select_all_checkbox" className="text-xs font-medium text-slate-700 cursor-pointer select-none font-sans">
-                    Select All Shown ({activeTab === 'personal' ? filteredPersonal.length : filteredHub.length} items)
+                    Select All Shown ({activeTab === 'personal' ? filteredPersonal.length : activeTab === 'hub' ? filteredHub.length : filteredSaved.length} items)
                   </label>
                 </div>
 
@@ -998,6 +1075,8 @@ export default function App() {
                       item={res}
                       origin="personal"
                       onDelete={handleDeletePersonal}
+                      onSaveToStuff={handleSaveToStuff}
+                      isSavedInStuff={savedStuffItems.some(x => x.originalId === res.id || x.id === res.id)}
                       isAdmin={currentUser.role === 'admin'}
                       folders={folders}
                       onEdit={handleEditClick}
@@ -1034,7 +1113,7 @@ export default function App() {
                   </div>
                 </div>
               )
-            ) : (
+            ) : activeTab === 'hub' ? (
               filteredHub.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in" id="hub_cards_grid">
                   {filteredHub.map(res => (
@@ -1044,6 +1123,8 @@ export default function App() {
                       origin="hub"
                       onDelete={handleDeleteHub}
                       onImport={handleImportHubItem}
+                      onSaveToStuff={handleSaveToStuff}
+                      isSavedInStuff={savedStuffItems.some(x => x.originalId === res.id || x.id === res.id)}
                       isAdmin={currentUser.role === 'admin'}
                       folders={folders}
                       onEdit={handleEditClick}
@@ -1075,6 +1156,34 @@ export default function App() {
                       Upload Expert Curation
                     </button>
                   )}
+                </div>
+              )
+            ) : (
+              filteredSaved.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in" id="saved_stuff_grid">
+                  {filteredSaved.map(res => (
+                    <ResourceCard
+                      key={res.id}
+                      item={res}
+                      origin="saved"
+                      onRemoveSaved={handleRemoveFromSavedStuff}
+                      isAdmin={currentUser.role === 'admin'}
+                      folders={folders}
+                      onMoveFolder={handleMoveFolder}
+                      isSelected={selectedIds.includes(res.id)}
+                      onToggleSelect={handleToggleSelect}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-12 text-center bg-white border border-[#E5E7EB] rounded-2xl min-h-[300px] shadow-sm" id="empty_saved_stuff">
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 mb-4 shadow-sm">
+                    <Bookmark className="w-10 h-10 text-amber-600" />
+                  </div>
+                  <h3 className="text-base font-display font-bold text-slate-900 mb-2 font-sans">Saved Stuff collection vacant</h3>
+                  <p className="text-xs text-[#64748B] leading-normal max-w-md mx-auto mb-6 font-sans">
+                    You haven't saved any study materials to this separate collection yet. Click the "Save" button on any card in your Vault or Hub.
+                  </p>
                 </div>
               )
             )}

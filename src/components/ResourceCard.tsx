@@ -23,8 +23,9 @@ import {
 interface ResourceCardProps {
   key?: string;
   item: PersonalResource | ResourceHubItem;
-  origin: 'personal' | 'hub';
+  origin: 'personal' | 'hub' | 'saved';
   onDelete?: (id: string) => void;
+  onRemoveSaved?: (id: string) => void;
   onImport?: (item: ResourceHubItem) => void;
   isAdmin: boolean;
   folders: Folder[];
@@ -32,22 +33,28 @@ interface ResourceCardProps {
   onMoveFolder?: (itemId: string, folderId: string) => void;
   isSelected?: boolean;
   onToggleSelect?: (id: string, checked: boolean) => void;
+  onSaveToStuff?: (item: PersonalResource | ResourceHubItem) => void;
+  isSavedInStuff?: boolean;
 }
 
 export default function ResourceCard({
   item,
   origin,
   onDelete,
+  onRemoveSaved,
   onImport,
   isAdmin,
   folders,
   onEdit,
   onMoveFolder,
   isSelected = false,
-  onToggleSelect
+  onToggleSelect,
+  onSaveToStuff,
+  isSavedInStuff = false
 }: ResourceCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [justSavedStuff, setJustSavedStuff] = useState(false);
 
   // Find assigned folder details
   const assignedFolder = folders.find(f => f.id === item.folderId);
@@ -96,6 +103,14 @@ export default function ResourceCard({
   };
 
   const ytId = item.type === 'video' ? getYouTubeId(item.url) : null;
+
+  const handleSaveToStuffClick = () => {
+    if (onSaveToStuff) {
+      onSaveToStuff(item);
+      setJustSavedStuff(true);
+      setTimeout(() => setJustSavedStuff(false), 2000);
+    }
+  };
 
   const handleImportClick = async () => {
     if (origin === 'hub' && onImport) {
@@ -353,14 +368,14 @@ export default function ResourceCard({
           </button>
 
           {/* Inline Folder Relocation select control ("move file / notes") */}
-          {origin === 'personal' && onMoveFolder && (
+          {(origin === 'personal' || origin === 'saved') && onMoveFolder && (
             <div className="flex items-center gap-1 bg-white border border-[#E5E7EB] rounded-lg px-2 py-1 shadow-xs text-[#64748B] hover:text-olive-900 transition-colors relative">
               <FolderSync className="w-3 h-3 text-slate-500 mr-0.5 flex-shrink-0" />
               <select
                 value={item.folderId || ''}
                 onChange={handleMoveChange}
-                className="text-[10px] font-mono outline-none border-none bg-transparent cursor-pointer font-bold leading-none pr-1 max-w-[85px] truncate text-olive-850"
-                title="Move file to another folder"
+                className="text-[10px] font-mono outline-none border-none bg-transparent cursor-pointer font-bold leading-none pr-1 max-w-[95px] truncate text-olive-850"
+                title="Select folder and move file immediately"
               >
                 <option value="">Move folder ...</option>
                 {folders.map(fold => (
@@ -376,6 +391,24 @@ export default function ResourceCard({
 
         {/* Standard Actions buttons */}
         <div className="flex items-center gap-1.5">
+          {/* Save to Saved Stuff Button */}
+          {onSaveToStuff && (
+            <button
+              type="button"
+              onClick={handleSaveToStuffClick}
+              className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg inline-flex items-center gap-1 transition-all outline-none cursor-pointer ${
+                isSavedInStuff || justSavedStuff
+                  ? 'bg-amber-50 text-amber-800 border border-amber-300 font-bold'
+                  : 'bg-white hover:bg-amber-50 text-slate-700 hover:text-amber-900 border border-slate-200'
+              }`}
+              title="Save this file to your separate Saved Stuff collection!"
+              lg-id={`save_stuff_btn_${item.id}`}
+            >
+              <BookmarkPlus className={`w-3.5 h-3.5 ${isSavedInStuff || justSavedStuff ? 'text-amber-600 fill-amber-500' : 'text-amber-600'}`} />
+              <span>{isSavedInStuff || justSavedStuff ? 'Saved' : 'Save'}</span>
+            </button>
+          )}
+
           {/* Edit trigger button (Personal only or Admin on Hub) */}
           {onEdit && (origin === 'personal' || (origin === 'hub' && isAdmin)) && (
             <button
@@ -421,6 +454,18 @@ export default function ResourceCard({
               className="p-1.5 text-[#64748B] hover:text-red-600 bg-white hover:bg-red-50 border border-[#E5E7EB] hover:border-red-200 rounded-lg transition-colors outline-none cursor-pointer shadow-sm"
               title="Delete from space"
               lg-id={`delete_btn_${item.id}`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Remove handle for Saved Stuff */}
+          {origin === 'saved' && onRemoveSaved && (
+            <button
+              onClick={() => onRemoveSaved(item.id)}
+              className="p-1.5 text-[#64748B] hover:text-red-600 bg-white hover:bg-red-50 border border-[#E5E7EB] hover:border-red-200 rounded-lg transition-colors outline-none cursor-pointer shadow-sm"
+              title="Remove from Saved Stuff"
+              lg-id={`remove_saved_btn_${item.id}`}
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>

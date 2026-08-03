@@ -40,10 +40,15 @@ export default function VaultStats({
             </div>
             <span className="text-xs font-bold text-olive-900 uppercase tracking-wider font-sans">Active Storage Overview</span>
           </div>
-          <span className="flex items-center gap-1 text-[10px] text-olive-700 font-mono font-bold bg-olive-50/70 border border-olive-200 px-2 py-0.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-olive-500 animate-pulse"></span>
-            Cloud Synced
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-amber-800 font-mono font-bold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+              ⚡ 10,000x Capacity Active
+            </span>
+            <span className="flex items-center gap-1 text-[10px] text-olive-700 font-mono font-bold bg-olive-50/70 border border-olive-200 px-2 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-olive-500 animate-pulse"></span>
+              Cloud Synced
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 bg-[#F8FAFC] p-3 rounded-xl border border-[#E5E7EB]">

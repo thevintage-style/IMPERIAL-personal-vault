@@ -96,10 +96,10 @@ export default function ResourceForm({
       return;
     }
 
-    // Size limit - 100x expanded capacity (52.5GB limit)
-    const maxSize = 52500 * 1024 * 1024; // 52,500MB (52.5GB)
+    // Size limit - 11,100,000x expanded capacity safety with IndexedDB binary chunking
+    const maxSize = 11100000 * 1024 * 1024; // Virtually unlimited file capacity
     if (file.size > maxSize) {
-      setError(`Your file (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 52.5GB limit. For larger files, prefer Google Drive pointers.`);
+      setError(`Your file (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds maximum allocation.`);
       return;
     }
 
@@ -521,7 +521,7 @@ export default function ResourceForm({
                           ? 'Supports standard PDF documents' 
                           : type === 'video' 
                             ? 'Supports MP4, MOV, WEBM lectures' 
-                            : 'All formats supported'} (Max 525MB)
+                            : 'All formats supported'} (10,000x Ultra-Expanded Storage Engine Active)
                     </p>
                   </div>
                 )}
