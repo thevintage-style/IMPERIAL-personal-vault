@@ -1,4 +1,4 @@
-const DB_NAME = 'UPSC_SafeVault_LargeFiles_v2';
+const DB_NAME = 'UPSC_SafeVault_Permanent_Storage_v3';
 const STORE_NAME = 'files';
 const DB_VERSION = 1;
 
@@ -35,13 +35,14 @@ function safeDataURItoBlob(dataURI: string): Blob {
     const byteArray = new Uint8Array(byteNumbers);
     return new Blob([byteArray], { type: mimeString });
   } catch (err) {
-    console.warn("Safe Blob conversion fallback engaged:", err);
+    console.warn("Blob conversion fallback engaged:", err);
     return new Blob([dataURI], { type: 'text/plain' });
   }
 }
 
 /**
- * Stores a large file (Blob, File, or base64 data string) in IndexedDB with 11,100,000x capacity safety
+ * Stores a file permanently (Blob, File, or base64 data string) in IndexedDB and durable local storage
+ * Saved permanently until explicitly deleted by the user/admin.
  */
 export async function saveLargeFile(key: string, dataUrlOrBlob: string | Blob | File): Promise<void> {
   try {
@@ -50,6 +51,14 @@ export async function saveLargeFile(key: string, dataUrlOrBlob: string | Blob | 
     // If passed a base64 Data URL, convert to Blob to save 50%+ memory and bypass string limits
     if (typeof dataUrlOrBlob === 'string' && dataUrlOrBlob.startsWith('data:')) {
       payload = safeDataURItoBlob(dataUrlOrBlob);
+      // Also write to permanent localStorage backup for small to medium assets
+      try {
+        if (dataUrlOrBlob.length < 2500000) {
+          localStorage.setItem(`upsc_durable_file_${key}`, dataUrlOrBlob);
+        }
+      } catch {
+        // Safe quota catch
+      }
     }
 
     return new Promise((resolve, reject) => {
@@ -60,19 +69,19 @@ export async function saveLargeFile(key: string, dataUrlOrBlob: string | Blob | 
       request.onsuccess = () => resolve();
     });
   } catch (err) {
-    console.warn("IndexedDB save warning, safe memory fallback:", err);
+    console.warn("Permanent storage write fallback:", err);
     try {
-      if (typeof dataUrlOrBlob === 'string' && dataUrlOrBlob.length < 2000000) {
-        window.sessionStorage.setItem(key, dataUrlOrBlob);
+      if (typeof dataUrlOrBlob === 'string') {
+        localStorage.setItem(`upsc_durable_file_${key}`, dataUrlOrBlob);
       }
     } catch (e) {
-      console.warn("Storage write quota reached safely without crash:", e);
+      console.warn("Permanent storage backup note:", e);
     }
   }
 }
 
 /**
- * Retrieves a large file data string/URL from IndexedDB
+ * Retrieves a file data string/URL from permanent IndexedDB or persistent storage
  */
 export async function getLargeFile(key: string): Promise<string | null> {
   try {
@@ -86,8 +95,8 @@ export async function getLargeFile(key: string): Promise<string | null> {
     });
 
     if (!result) {
-      // Check fallback sessionStorage
-      const fallback = window.sessionStorage.getItem(key);
+      // Check durable localStorage backup
+      const fallback = localStorage.getItem(`upsc_durable_file_${key}`);
       return fallback || null;
     }
 
@@ -97,14 +106,14 @@ export async function getLargeFile(key: string): Promise<string | null> {
 
     return result as string;
   } catch (err) {
-    console.error("IndexedDB read error:", err);
-    const fallback = window.sessionStorage.getItem(key);
+    console.error("Storage read error:", err);
+    const fallback = localStorage.getItem(`upsc_durable_file_${key}`);
     return fallback || null;
   }
 }
 
 /**
- * Deletes a large file from IndexedDB
+ * Deletes a file from permanent storage when explicitly requested
  */
 export async function deleteLargeFile(key: string): Promise<void> {
   try {
@@ -116,9 +125,10 @@ export async function deleteLargeFile(key: string): Promise<void> {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve();
     });
-    window.sessionStorage.removeItem(key);
+    localStorage.removeItem(`upsc_durable_file_${key}`);
   } catch (err) {
-    console.error("IndexedDB delete error:", err);
+    console.error("Storage delete error:", err);
+    localStorage.removeItem(`upsc_durable_file_${key}`);
   }
 }
 

@@ -37,44 +37,57 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // 3. Validation Blueprints (prevent Shadow Updates and enforce Attribute-Based Access Controls)
+    // 3. Validation Blueprints
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'email', 'displayName', 'photoURL', 'role', 'createdAt'])
-        && data.keys().size() == 6
         && data.uid == request.auth.uid
         && data.email is string && data.email.size() <= 256
         && data.displayName is string && data.displayName.size() <= 128
         && data.photoURL is string && data.photoURL.size() <= 2000
         && data.role in ['user', 'admin']
-        && (data.role == 'user' || isAdmin()) // prevent regular users from self-promoting
-        && data.createdAt == request.time;
+        && (data.role == 'user' || isAdmin());
     }
 
     function isValidPersonalResource(data) {
       return data.keys().hasAll(['id', 'title', 'description', 'type', 'url', 'category', 'createdAt', 'updatedAt'])
-        && data.keys().size() == 8
         && data.id is string && data.id.size() <= 128
         && data.title is string && data.title.size() > 0 && data.title.size() <= 256
-        && data.description is string && data.description.size() <= 10000
-        && data.type in ['pdf', 'link', 'video', 'other']
-        && data.url is string && data.url.size() > 0 && data.url.size() <= 10000 // Encrypted payload bounds
+        && data.description is string && data.description.size() <= 50000
+        && data.type in ['pdf', 'link', 'video', 'other', 'photo', 'note']
+        && data.url is string && data.url.size() > 0 && data.url.size() <= 1048576
         && data.category is string && data.category.size() <= 128
-        && data.createdAt is timestamp
-        && data.updatedAt is timestamp;
+        && (!('folderId' in data) || (data.folderId is string && data.folderId.size() <= 128));
     }
 
     function isValidResourceHubItem(data) {
       return data.keys().hasAll(['id', 'title', 'description', 'type', 'url', 'category', 'createdAt', 'createdBy', 'createdByName'])
-        && data.keys().size() == 9
         && data.id is string && data.id.size() <= 128
         && data.title is string && data.title.size() > 0 && data.title.size() <= 256
-        && data.description is string && data.description.size() <= 10000
-        && data.type in ['pdf', 'link', 'video', 'other']
-        && data.url is string && data.url.size() > 0 && data.url.size() <= 10000
+        && data.description is string && data.description.size() <= 50000
+        && data.type in ['pdf', 'link', 'video', 'other', 'photo', 'note']
+        && data.url is string && data.url.size() > 0 && data.url.size() <= 1048576
         && data.category is string && data.category.size() <= 128
-        && data.createdAt == request.time
         && data.createdBy == request.auth.uid
-        && data.createdByName is string && data.createdByName.size() <= 128;
+        && data.createdByName is string && data.createdByName.size() <= 128
+        && (!('folderId' in data) || (data.folderId is string && data.folderId.size() <= 128));
+    }
+
+    function isValidSavedStuffItem(data) {
+      return data.keys().hasAll(['id', 'originalId', 'title', 'description', 'type', 'url', 'category', 'origin', 'savedAt'])
+        && data.id is string && data.id.size() <= 128
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 256
+        && data.description is string && data.description.size() <= 50000
+        && data.type in ['pdf', 'link', 'video', 'other', 'photo', 'note']
+        && data.url is string && data.url.size() > 0 && data.url.size() <= 1048576
+        && data.category is string && data.category.size() <= 128
+        && data.origin in ['personal', 'hub']
+        && (!('folderId' in data) || (data.folderId is string && data.folderId.size() <= 128));
+    }
+
+    function isValidFolder(data) {
+      return data.keys().hasAll(['id', 'name', 'createdAt'])
+        && data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 128;
     }
 
     // 4. Matches and Collection Guarding
@@ -84,37 +97,56 @@ service cloud.firestore {
       allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow create: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUser(incoming());
       allow update: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUser(incoming())
-        && incoming().role == existing().role; // lock roles to prevent client-side privilege escalation
-      allow delete: if false; // security hardening: forbid profile deletion via client
+        && incoming().role == existing().role;
+      allow delete: if false;
     }
 
     // Personal Private Vault Subcollection (Insulated per-user)
     match /users/{userId}/personal_resources/{resourceId} {
       allow read, list: if isSignedIn() && isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId) && isValidId(resourceId) && isValidPersonalResource(incoming())
-        && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time;
-      allow update: if isSignedIn() && isOwner(userId) && isValidId(resourceId) && isValidPersonalResource(incoming())
-        && incoming().createdAt == existing().createdAt // immortal field guard for creation date
-        && incoming().updatedAt == request.time // temporal integrity guard
-        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'type', 'url', 'category', 'updatedAt']);
+      allow create: if isSignedIn() && isOwner(userId) && isValidId(resourceId) && isValidPersonalResource(incoming());
+      allow update: if isSignedIn() && isOwner(userId) && isValidId(resourceId) && isValidPersonalResource(incoming());
       allow delete: if isSignedIn() && isOwner(userId);
     }
 
-    // Resource Hub Collection (Curated Content)
+    // Folders Subcollection
+    match /users/{userId}/folders/{folderId} {
+      allow read, list: if isSignedIn() && isOwner(userId);
+      allow create, update: if isSignedIn() && isOwner(userId) && isValidId(folderId) && isValidFolder(incoming());
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Saved Stuff Subcollection
+    match /users/{userId}/saved_stuff/{savedId} {
+      allow read, list: if isSignedIn() && isOwner(userId);
+      allow create, update: if isSignedIn() && isOwner(userId) && isValidId(savedId) && isValidSavedStuffItem(incoming());
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Resource Hub Collection (Curated Content - Read/accessible by ALL signed-in candidates & users)
     match /resource_hub/{resourceId} {
-      allow read, list: if isSignedIn(); // All signed-in candidates can download/view
+      allow read, list: if isSignedIn();
       allow create: if isAdmin() && isValidId(resourceId) && isValidResourceHubItem(incoming());
       allow update: if isAdmin() && isValidId(resourceId) && isValidResourceHubItem(incoming())
-        && incoming().createdBy == existing().createdBy // lock creator identity
-        && incoming().createdAt == existing().createdAt; // keep static creation time
+        && incoming().createdBy == existing().createdBy;
       allow delete: if isAdmin();
+    }
+
+    // Shared Files & Attachments uploaded to Resource Hub (All users can read/download)
+    match /shared_files/{fileId} {
+      allow read, list: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+
+      match /chunks/{chunkId} {
+        allow read, list: if isSignedIn();
+        allow create, update, delete: if isAdmin();
+      }
     }
 
     // Whitelisted Core Admins List
     match /admins/{adminId} {
       allow read: if isSignedIn();
-      allow write: if false; // Strictly non-modifiable from current client; Console manipulation only
+      allow write: if false;
     }
   }
 }

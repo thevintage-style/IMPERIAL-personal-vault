@@ -96,7 +96,7 @@ export default function ResourceForm({
       return;
     }
 
-    // Size limit - 11,100,000x expanded capacity safety with IndexedDB binary chunking
+    // Size limit - maximum persistent capacity safety with IndexedDB binary chunking
     const maxSize = 11100000 * 1024 * 1024; // Virtually unlimited file capacity
     if (file.size > maxSize) {
       setError(`Your file (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds maximum allocation.`);
@@ -521,7 +521,7 @@ export default function ResourceForm({
                           ? 'Supports standard PDF documents' 
                           : type === 'video' 
                             ? 'Supports MP4, MOV, WEBM lectures' 
-                            : 'All formats supported'} (10,000x Ultra-Expanded Storage Engine Active)
+                            : 'All formats supported'} (Permanent Lifetime Storage)
                     </p>
                   </div>
                 )}

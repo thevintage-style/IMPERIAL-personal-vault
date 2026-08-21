@@ -424,6 +424,8 @@ export function subscribePersonalResources(
 
 /**
  * Save resource to expert Shared "Resource Hub" (Admin access only)
+ * Saved permanently until explicitly deleted by admin.
+ * All uploaded files, PDFs, photos, and notes are synced so ALL users can access and view them.
  */
 export async function saveResourceHubItem(
   adminId: string,
@@ -433,7 +435,7 @@ export async function saveResourceHubItem(
 ): Promise<void> {
   const hubId = existingId || "hub_" + Math.random().toString(36).substring(2, 15);
   
-  // Clean up old IndexedDB file if type changed or URL is not a data URL anymore
+  // Clean up old file if type changed or URL is not a data URL anymore
   if (existingId && (!item.url || !item.url.startsWith('data:'))) {
     await deleteLargeFile(`large_file_${existingId}`);
   }
@@ -443,6 +445,30 @@ export async function saveResourceHubItem(
     const fileKey = `large_file_${hubId}`;
     await saveLargeFile(fileKey, item.url);
     finalUrl = `largefile:${fileKey}`;
+
+    // Store in shared cloud storage collection so ALL signed-in candidates can download/view
+    if (!isLocalSandbox) {
+      try {
+        const sharedFileRef = doc(db, `shared_files/${hubId}`);
+        const rawData = item.url;
+        if (rawData.length < 800000) {
+          await setDoc(sharedFileRef, { fileId: hubId, data: rawData, updatedAt: serverTimestamp() });
+        } else {
+          // Chunk larger files across documents
+          const chunkSize = 400000;
+          const totalChunks = Math.ceil(rawData.length / chunkSize);
+          await setDoc(sharedFileRef, { fileId: hubId, isChunked: true, totalChunks, updatedAt: serverTimestamp() });
+          for (let i = 0; i < totalChunks; i++) {
+            const chunkData = rawData.substring(i * chunkSize, (i + 1) * chunkSize);
+            await setDoc(doc(db, `shared_files/${hubId}/chunks/chunk_${i}`), { index: i, data: chunkData });
+          }
+        }
+      } catch (e) {
+        console.warn("Shared file cloud sync:", e);
+      }
+    } else {
+      localStorage.setItem(`upsc_shared_hub_file_${hubId}`, item.url);
+    }
   }
   
   // 🔒 Client-Side Encryption: Encrypt with Shared Community Key to lock cloud index databases
@@ -459,6 +485,7 @@ export async function saveResourceHubItem(
         type: item.type,
         url: encryptedUrl,
         category: item.category,
+        folderId: item.folderId || "",
         createdAt: existingId ? Timestamp.fromDate(new Date()) : serverTimestamp(),
         createdBy: adminId,
         createdByName: adminName
@@ -479,7 +506,8 @@ export async function saveResourceHubItem(
         description: item.description,
         type: item.type,
         url: encryptedUrl,
-        category: item.category
+        category: item.category,
+        folderId: item.folderId || ""
       };
     } else {
       list.push({
@@ -489,6 +517,7 @@ export async function saveResourceHubItem(
         type: item.type,
         url: encryptedUrl,
         category: item.category,
+        folderId: item.folderId || "",
         createdAt: new Date().toISOString(),
         createdBy: adminId,
         createdByName: adminName
@@ -505,10 +534,12 @@ export async function saveResourceHubItem(
  */
 export async function deleteResourceHubItem(hubId: string): Promise<void> {
   await deleteLargeFile(`large_file_${hubId}`);
+  localStorage.removeItem(`upsc_shared_hub_file_${hubId}`);
   if (!isLocalSandbox) {
     const docPath = `resource_hub/${hubId}`;
     try {
       await deleteDoc(doc(db, docPath));
+      await deleteDoc(doc(db, `shared_files/${hubId}`));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, docPath);
     }
@@ -539,11 +570,11 @@ function checkAndSeedHub() {
 checkAndSeedHub();
 
 /**
- * Shared Hub Decryption stream
+ * Shared Hub Decryption stream - allows all users to access and view shared items and files
  */
 export async function decryptHubResources(rawItems: any[]): Promise<ResourceHubItem[]> {
   return Promise.all(rawItems.map(async (raw) => {
-    let plainUrl = raw.url || raw.encryptedUrl; // support seed indices or raw
+    let plainUrl = raw.url || raw.encryptedUrl;
     let isDecrypted = false;
     
     if (plainUrl && plainUrl.startsWith("ENC:")) {
@@ -553,7 +584,45 @@ export async function decryptHubResources(rawItems: any[]): Promise<ResourceHubI
     
     if (plainUrl && plainUrl.startsWith("largefile:")) {
       const fileKey = plainUrl.replace("largefile:", "");
-      const localDataUrl = await getLargeFile(fileKey);
+      const hubId = raw.id;
+      let localDataUrl = await getLargeFile(fileKey);
+
+      // If not cached locally in IndexedDB, fetch from Firestore shared_files or sandbox storage
+      if (!localDataUrl) {
+        if (!isLocalSandbox) {
+          try {
+            const sharedDocRef = doc(db, `shared_files/${hubId}`);
+            const snap = await getDoc(sharedDocRef);
+            if (snap.exists()) {
+              const fileInfo = snap.data();
+              if (fileInfo.data) {
+                localDataUrl = fileInfo.data;
+              } else if (fileInfo.isChunked && fileInfo.totalChunks) {
+                let assembled = '';
+                for (let i = 0; i < fileInfo.totalChunks; i++) {
+                  const chunkSnap = await getDoc(doc(db, `shared_files/${hubId}/chunks/chunk_${i}`));
+                  if (chunkSnap.exists()) {
+                    assembled += chunkSnap.data().data || '';
+                  }
+                }
+                localDataUrl = assembled;
+              }
+              if (localDataUrl) {
+                await saveLargeFile(fileKey, localDataUrl);
+              }
+            }
+          } catch (e) {
+            console.warn("Shared file retrieval note:", e);
+          }
+        } else {
+          const storedShared = localStorage.getItem(`upsc_shared_hub_file_${hubId}`);
+          if (storedShared) {
+            localDataUrl = storedShared;
+            await saveLargeFile(fileKey, storedShared);
+          }
+        }
+      }
+      
       if (localDataUrl) {
         plainUrl = localDataUrl;
       }
